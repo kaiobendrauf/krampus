@@ -3,6 +3,7 @@ import os
 import sys
 import uuid
 
+from datetime import datetime, timezone
 from google.cloud import firestore
 
 # --------------------------------------------------------------------------------
@@ -26,7 +27,7 @@ def setup():
 
 def add(collection: str, data: dict, row_id: str=None) -> tuple[int, str]:
     '''
-    Adds one row of data to the database, optionally at some specific row id
+    Adds one row of data to the database, optionally at some specific row id. For the "rules" collection the date a rule is added is tracked.
 
     Parameters:
         collection: name of the collection to add data to
@@ -37,6 +38,8 @@ def add(collection: str, data: dict, row_id: str=None) -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
+    if collection == 'rules':
+        data['server_last_edit_date'] = datetime.now(timezone.utc)
     if row_id:
         db.collection(collection).document(row_id).set(data)
         return 200, f'Entry added to {collection}'
@@ -58,14 +61,43 @@ def read(collection: str, limit: int, cursor: str=None) -> dict:
         cursor: cursor so that only data after cursor is read
 
     Returns:
-        dict: dict containing data and cursor
-              returns None if no data was found
+        dict: dict containing list of data (key="data") and optionally a cursor (key="cursor") if there is more data to read
     '''
     data, cursor = get_all_docs(collection, limit, cursor)
-    if data and cursor:
-        return {"data": data, "cursor": cursor}
+    if data:
+        if collection == 'rules':
+            # this data has server added fields that need to be removed
+            for row in data:
+                row.pop('server_last_edit_date')
+        if cursor:
+            return {'data': data, 'cursor': cursor}
+        else:
+            return {'data': data}
+    return {'data': []}
+
+def read_new_rules(date: datetime, limit: int, cursor: str=None) -> dict:
+    '''
+    Reads multiple rows of data from the rules collection that were edited after the given time point
+
+    Parameters:
+        date: datetime to read after (not inclusive)
+        limit: how many rows of data to read
+        cursor: cursor so that only data after cursor is read
+
+    Returns:
+        dict: dict containing list of rules (key="rules") and optionally a cursor (key="cursor") if there is more data to read
+    '''
+    data, cursor = get_all_docs_by_filter('rules', [('server_last_edit_date', '>', date)], limit=limit, cursor=cursor)
+    if data:
+        # this data has server added fields that need to be removed
+        for row in data:
+            row.pop('server_last_edit_date')
     else:
-        return None
+        data = []
+    if data and cursor:
+        return {"rules": data, "cursor": cursor}
+    else:
+        return {'rules': data}
 
 def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]:
     '''
@@ -161,7 +193,6 @@ def get_doc_by_id(collection, doc):
     return doc_ref.get()
 
 def get_doc_by_match(collection, data):
-    # Create a reference to the cities collection
     query_ref = db.collection(collection)
     for key in data:
         # Create a query against the collection
@@ -173,16 +204,45 @@ def get_all_docs(collection, limit=None, cursor=None):
     if limit:
         if cursor:
             cursor_doc = get_doc_by_id(collection, cursor)
-            query = db.collection(collection).start_after(cursor_doc).limit(limit)
+            query = db.collection(collection).start_after(cursor_doc).limit(limit+1)
         else:
-            query = db.collection(collection).limit(limit)
+            query = db.collection(collection).limit(limit+1)
         docs = list(query.stream())
         if len(docs) > 0:
-            last_doc = list(docs)[-1]
-            return [doc.to_dict() for doc in docs], last_doc.id
+            if len(docs) > limit:
+                # more to read
+                docs = docs[:-1]
+                last_doc = list(docs)[-1]
+                return [doc.to_dict() for doc in docs], last_doc.id
+            else:
+                # done reading
+                return [doc.to_dict() for doc in docs], None
         else:
             return None, None
     else:
         docs = db.collection(collection).stream()
         return [doc.to_dict() for doc in docs], None
 
+def get_all_docs_by_filter(collection, filters, limit=None, cursor=None):
+    # create query
+    query = db.collection(collection)
+    if cursor:
+        query.start_after(cursor)
+    if limit:
+        query.limit(limit+1)
+    # add filters
+    for key, comp, val in filters:
+        # Create a query against the collection
+        query = query.where(filter=firestore.FieldFilter(key, comp, val))
+    docs = list(query.stream())
+    if len(docs) > 0:
+        if len(docs) > limit:
+            # more to read
+            docs = docs[:-1]
+            last_doc = list(docs)[-1]
+            return [doc.to_dict() for doc in docs], last_doc.id
+        else:
+            # done reading
+            return [doc.to_dict() for doc in docs], None
+    else:
+        return None, None

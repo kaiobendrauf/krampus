@@ -38,15 +38,6 @@ def add_to_db(collection, data):
             return 409, f'Hostconfig with target {target} already exists.'
         else:
             return db.add(collection, data, target)
-    if collection == 'rules':
-        matches = db.lookup(collection, data)
-        if len(matches) == 0:
-            # new entry
-            data['server_last_edit_date'] = datetime.now(timezone.utc)
-        else:
-            # old entry
-            return 200, f'Data already found in {collection}, so was not added.'
-        data['server_last_edit_date'] = datetime.now(timezone.utc)
     return db.add(collection, data)
 
 # ----------------------------------------
@@ -126,7 +117,11 @@ def ruledownload(machine_id):
     logging.debug('ruledownload')
     if flask.request.content_type == 'application/json':
         data = flask.request.get_json()
-        return flask.Response(status=200)
+        machine_status = db.lookup_by_id('machinestatus', machine_id)
+        if machine_status:
+            return process_ruledownload(machine_id, machine_status, data)
+        else:
+            flask.abort(404)
     else:
         flask.abort(415)
 
@@ -135,7 +130,12 @@ def postflight(machine_id):
     logging.debug('postflight')
     if flask.request.content_type == 'application/json':
         data = flask.request.get_json()
-        return flask.Response(status=200)
+        machine_status = db.lookup_by_id('machinestatus', machine_id)
+        if machine_status:
+            process_postflight(machine_id, machine_status, data)
+            return flask.Response(status=200)
+        else:
+            flask.abort(404)
     else:
         flask.abort(415)
 
@@ -183,14 +183,7 @@ def db_read(collection):
                 result = db.read(collection, data['limit'], data['cursor'])
             else:
                 result = db.read(collection, data['limit'])
-            if result:
-                if collection == 'rules':
-                    # this data has server added fields that need to be removed
-                    for row in result['data']:
-                        row.pop('server_last_edit_date')
-                return result
-            else:
-                return flask.Response(f'No items to read.', status=200)
+            return result
         else:
             flask.abort(400)
     else:
@@ -206,12 +199,12 @@ def process_preflight(machine_id, data):
     machine_status = db.lookup_by_id('machinestatus', machine_id)
     new = False
     if not machine_status:
-        machine_status = dict()
         choose_sync_type(data, machine_status, hostconfig, True)
         new = True
     else:
         choose_sync_type(data, machine_status, hostconfig)
-    machine_status['stage'] = 'preflight'
+    # machine_status['stage'] = 'preflight'
+    machine_status['n_rules_sent'] = 0
     if new:
         db.add('machinestatus', machine_status, machine_id)
     else:
@@ -248,28 +241,73 @@ def get_hostconfig(machine_id, data):
     return result
 
 def choose_sync_type(request, machine_status, hostconfig, new=False):
-    if new or request['request_clean_sync'] or (datetime.now(timezone.utc) > machine_status['full_sync_by']):
-        machine_status['sync_type'] = 'CLEAN'
-        hostconfig['sync_type'] = 'CLEAN'
-        min_days = os.environ.get('MIN_CLEAN_ALL_DAYS')
-        if not min_days:
-            min_days = 7
+    if new or request['request_clean_sync'] or (datetime.now(timezone.utc) > machine_status['clean_sync_by']):
+        if hostconfig and type(hostconfig) == dict and 'sync_type' in hostconfig and hostconfig['sync_type'] == 'CLEAN_ALL':
+            machine_status['sync_type'] = 'CLEAN_ALL'
+            hostconfig['sync_type'] = 'CLEAN_ALL'
         else:
-            min_days = int(min_days)
-        max_days = os.environ.get('MAX_CLEAN_ALL_DAYS')
-        if not max_days:
-            min_days = 13
-        else:
-            max_days = int(max_days)
-        machine_status['full_sync_by'] = datetime.now(timezone.utc) + timedelta(days=random.randint(min_days, max_days))
+            machine_status['sync_type'] = 'CLEAN'
+            hostconfig['sync_type'] = 'CLEAN'
+        # clean sync will now be required until completed
+        machine_status['clean_sync_by'] = datetime.now(timezone.utc)
     elif 'sync_type' in hostconfig:
         machine_status['sync_type'] = hostconfig['sync_type']
+    else:
+        machine_status['sync_type'] = 'NORMAL'
+
+def pick_future_clean_sync_by(machine_status):
+    min_days = os.environ.get('MIN_CLEAN_ALL_DAYS')
+    if not min_days:
+        min_days = 7
+    else:
+        min_days = int(min_days)
+    max_days = os.environ.get('MAX_CLEAN_ALL_DAYS')
+    if not max_days:
+        min_days = 13
+    else:
+        max_days = int(max_days)
+    machine_status['clean_sync_by'] = datetime.now(timezone.utc) + timedelta(days=random.randint(min_days, max_days))
+
+def process_ruledownload(machine_id, machine_status, data):
+    batch_size = os.environ.get('BATCH_SIZE')
+    if not batch_size:
+        batch_size = 50
+    else:
+        batch_size = int(batch_size)
+    cursor = None
+    if 'cursor' in data:
+        cursor = data['cursor']
+    if machine_status['sync_type'] == 'CLEAN' or machine_status['sync_type'] == 'CLEAN_ALL' or ('last_check_in' not in machine_status):
+        result = db.read('rules', batch_size, cursor)
+        result['rules'] = result['data']
+        del result['data']
+    else:
+        result = db.read_new_rules(machine_status['last_check_in'], batch_size, cursor) 
+    machine_status['n_rules_sent'] += len(result['rules'])
+    db.edit('machinestatus', machine_status, machine_id)
+    return result
+
+
+def process_postflight(machine_id, machine_status, data):
+    if data['rules_received'] == machine_status['n_rules_sent']:
+        # data sent successfully
+        if data['rules_processed'] == data['rules_received']:
+            # data processed successfully, these rules do not need to be resent
+            machine_status['last_check_in'] = datetime.now(timezone.utc)
+        else:
+            logging.warning(f'{data["rules_received"]} rules received by {machine_id}, but {data["rules_processed"]} processed.')
+    else:
+        logging.warning(f'{machine_status["n_rules_sent"]} rules sent to {machine_id}, but {data["rules_received"]} received.')
+    if data['sync_type'] == 'CLEAN' or data['sync_type'] == 'CLEAN_ALL':
+        pick_future_clean_sync_by(machine_status)
+        logging.debug('Updating clean_sync_by date for {machine_id}.')
+    machine_status['n_rules_sent'] = 0
+    db.edit('machinestatus', machine_status, machine_id)
 
 
 # ----------------------------------------
 #                 Logging
 # ----------------------------------------
-
 def setup_logging():
     # read logging level from env
     logging.basicConfig(
@@ -293,52 +331,16 @@ def request_logging():
 
 
 # ----------------------------------------
-#                 Options
-# ----------------------------------------
-
-def process_options():
-    pass
-    # parser = optparse.OptionParser()
-    # parser.set_usage('Usage: %prog [options]')
-    # parser.add_option('--baseline-path', '-b', dest='baseline_path',
-    #                     help='Optional path to custom baseline yaml file.')
-    # parser.add_option('--baseline-name', '-n', dest='baseline_name',
-    #                     help='Optional name of baseline yaml file.')
-    # parser.add_option('--custom', '-c', dest='custom',
-    #                     help='Optional path to custom folder.')
-    # parser.add_option('--rules', '-r', dest='rules',
-    #                     help='Optional path to rules folder.')
-    # parser.add_option('--folder', '-f', dest='folder',
-    #                     help='Optional path to a folder optionally containing a baselines, custom and rules folder. These folders will be used if paths are not directly specified.')
-    # parser.add_option('--config', '-y', dest='config_file',
-    #                     help=f'Optional path to the configuration yaml file, which specifies values for the munki item. Defaults to {CONFIG_PATH}')
-    # parser.add_option('--munki', '-m', dest='output_path', default=OUTPUT_PATH,
-    #                     help=f'Optional path to the directory generated munki files should be written to. Defaults to {OUTPUT_PATH}')
-    # parser.add_option('--prefix', dest='prefix',
-    #                     help=f'Optional prefix to add to the name of every generated munki item and it\'s file name.')
-    # parser.add_option('--suffix', dest='suffix',
-    #                     help=f'Optional suffix to add to the name of every generated munki item and it\'s file name..')
-    # parser.add_option('--version', '-v', dest='version',
-    #                     help=f'Optional version to be set in every munki item and appended to the name of every generated munki item. Specifying a version here will override a version given in the configuration yaml file.')
-    # parser.add_option('--separate', '-s', dest='separate_fix', action='store_true',
-    #                     help='Write fix script in preinstall_script, rather than in installcheck_script.')
-    # parser.add_option('--no-munki-output', dest='no_echo', action='store_true',
-    #                     help='Write fix script in preinstall_script, rather than in installcheck_script.')
-    # parser.add_option('--config-profile-list-file', dest='config_profile_list_file',
-    #                     help='Optional path to the file where munki items will write to if their fix can only be implemented by a configuration profile. Specifying a file path here will override a file given in the configuration yaml file.')
-    # parser.add_option('--markdown', dest='markdown_path', default=MD_PATH,
-    #                     help=f'Optional file name to print markdown summary of how the rules were processed by this script. Defaults to {MD_PATH}')
-    # options, _ = parser.parse_args()
-    # return options.baseline_path, options.baseline_name, options.custom, options.rules, options.folder, options.config_file, options.output_path, options.prefix, options.suffix, options.version, options.separate_fix, not options.no_echo, options.config_profile_list_file, options.markdown_path
-
-# ----------------------------------------
 #                 Main
 # ----------------------------------------
-
 def main():
     setup_logging()
     setup_db()
     setup_event_handler()
+
+    if not os.environ.get('BATCH_SIZE'):
+        logging,warning(f'No batch size defined, using default: 50.')
+
 
     # Use waitress to run flask
     serve(server, host='0.0.0.0', port=3000)
