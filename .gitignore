@@ -1,0 +1,4 @@
+.DS_Store
+*.pyc
+run.sh
+test.yaml
