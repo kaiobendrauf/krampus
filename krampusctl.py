@@ -33,7 +33,7 @@ def replicate(data, server_url, limit):
         url = server_url + f'/db-read/{collection}'
         req_result = server_req(url, {'limit': limit})
         req_result = process_rep_response(req_result)
-        while len(req_result['data']) == limit:
+        while 'cursor' in req_result:
             # still reading
             # process data (note data that does not need to be added, delete what needs to be deleted)
             collection_data = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}')
@@ -52,15 +52,10 @@ def process_rep_response(req_res):
         # get json
         req_res = req_res.json()
         # check if data has expected shape
-        if 'data' in req_res and 'cursor' in req_res:
+        if 'data' in req_res:
             return req_res
-        # got data but wrong shape -> error
-        else:
-            logging.error('Unexpected response from server. Cannot continue.')
-            sys.exit(1)
-    # no response -> nothing to read
-    else:
-        return {'data': []}
+    logging.error('Unexpected response from server. Cannot continue.')
+    sys.exit(1)
 
 def process_replicate_chunk(response_data, collection_data, del_url): 
     for row in response_data:
@@ -181,7 +176,6 @@ def check_valid_yaml_dict(data):
 # ----------------------------------------
 #                 Logging
 # ----------------------------------------
-
 def setup_logging():
     # read logging level from env
     logging.basicConfig(
@@ -193,7 +187,6 @@ def setup_logging():
 # ----------------------------------------
 #                 Options
 # ----------------------------------------
-
 def process_options():
     parser = optparse.OptionParser()
     parser.set_usage('Usage: %prog [options]')
@@ -210,12 +203,11 @@ def process_options():
     parser.add_option('--server', '-s', dest='server_url', default="http://0.0.0.0:3000",
                         help='limit for reading from database')
     options, _ = parser.parse_args()
-    return options.rep_path, options.add_path, options.del_path, options.del_path_m, options.limit, options.server_url
+    return options.rep_path, options.add_path, options.del_path, options.del_path_m, int(options.limit), options.server_url
 
 # ----------------------------------------
 #                 Main
 # ----------------------------------------
-
 def main():
     setup_logging()
     rep_path, add_path, del_path, del_path_m, limit, server_url = process_options()
