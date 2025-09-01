@@ -7,6 +7,7 @@ import os
 import random
 import signal
 import sys
+import zlib
 
 import flask
 from waitress import serve
@@ -55,7 +56,8 @@ def add_to_db(collection, data):
 def setup_event_handler():
     global event_handler
     setup_data = None
-    if os.environ.get('PUB_SUB_EVENT_ID'):
+    # print(os.environ)
+    if os.environ.get('PUB_SUB_TOPIC_ID'):
         # pub sub event handler
         logging.info("Using Pub/Sub as the event handler.")
         import event_handlers.event_handler_pubsub as event_handler
@@ -99,27 +101,25 @@ def index():
 @server.route('/preflight/<machine_id>', methods=['POST'])
 def preflight(machine_id):
     logging.debug('preflight')
-    if flask.request.content_type == 'application/json':
-        data = flask.request.get_json()
-        result = process_preflight(machine_id, data)
-        return result
-    else:
-        flask.abort(415)
-
+    print(flask.request.headers)
+    print(flask.request.get_data())
+    print(zlib.decompress(flask.request.get_data()))
+    data = get_request_data(flask.request)
+    
+    result = process_preflight(machine_id, data)
+    return result
+    
 @server.route('/eventupload/<machine_id>', methods=['POST'])
 def eventupload(machine_id):
     logging.debug('eventupload')
-    if flask.request.content_type == 'application/json':
-        data = flask.request.get_json()
-        if 'events' in data:
-            result = event_handler.send_events(data['events'])
-            if result:
-                return result
-            return flask.Response(status=200)
-        else:
-            flask.abort(400) 
+    data = get_request_data(flask.request)
+    if 'events' in data:
+        result = event_handler.send_events(data['events'])
+        if result:
+            return result
+        return flask.Response(status=200)
     else:
-        flask.abort(415)
+        flask.abort(400) 
 
 @server.route('/ruledownload/<machine_id>', methods=['POST'])
 def ruledownload(machine_id):
@@ -200,6 +200,21 @@ def db_read(collection):
 #           SANTA Request Logic
 # ----------------------------------------
 
+def get_request_data(request):
+    if request.content_type == 'application/json':
+        if request.headers.get('Content-Encoding') == "deflate":
+            decompressed_data = zlib.decompress(request.get_data())
+            data = json.loads(decompressed_data.decode('utf-8'))
+        else:
+            data = request.get_json()
+        return data
+    else:
+        flask.abort(415)
+
+def decompress_data(data):
+    decompressed_data = zlib.decompress(data)
+    return json.loads(decompressed_data.decode('utf-8'))
+
 def process_preflight(machine_id, data):
     hostconfig = get_hostconfig(machine_id, data)
     # machine_status = data to be stored for other requests
@@ -248,7 +263,7 @@ def get_hostconfig(machine_id, data):
     return result
 
 def choose_sync_type(request, machine_status, hostconfig, new=False):
-    if new or request['request_clean_sync'] or (datetime.now(timezone.utc) > machine_status['full_sync_by']):
+    if new or request.get('request_clean_sync') or (datetime.now(timezone.utc) > machine_status['full_sync_by']):
         machine_status['sync_type'] = 'CLEAN'
         hostconfig['sync_type'] = 'CLEAN'
         min_days = os.environ.get('MIN_CLEAN_ALL_DAYS')
@@ -341,7 +356,7 @@ def main():
     setup_event_handler()
 
     # Use waitress to run flask
-    serve(server, host='0.0.0.0', port=3000)
+    serve(server, host='0.0.0.0', port=8000)
     
 
 if __name__ == '__main__':
