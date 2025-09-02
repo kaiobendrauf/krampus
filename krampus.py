@@ -115,29 +115,23 @@ def eventupload(machine_id):
 @server.route('/ruledownload/<machine_id>', methods=['POST'])
 def ruledownload(machine_id):
     logging.debug('ruledownload')
-    if flask.request.content_type == 'application/json':
-        data = flask.request.get_json()
-        machine_status = db.lookup_by_id('machinestatus', machine_id)
-        if machine_status:
-            return process_ruledownload(machine_id, machine_status, data)
-        else:
-            flask.abort(404)
+    data = get_request_data(flask.request)
+    machine_status = db.lookup_by_id('machinestatus', machine_id)
+    if machine_status:
+        return process_ruledownload(machine_id, machine_status, data)
     else:
-        flask.abort(415)
+        flask.abort(404)
 
 @server.route('/postflight/<machine_id>', methods=['POST'])
 def postflight(machine_id):
     logging.debug('postflight')
-    if flask.request.content_type == 'application/json':
-        data = flask.request.get_json()
-        machine_status = db.lookup_by_id('machinestatus', machine_id)
-        if machine_status:
-            process_postflight(machine_id, machine_status, data)
-            return flask.Response(status=200)
-        else:
-            flask.abort(404)
+    data = get_request_data(flask.request)
+    machine_status = db.lookup_by_id('machinestatus', machine_id)
+    if machine_status:
+        process_postflight(machine_id, machine_status, data)
+        return flask.Response(status=200)
     else:
-        flask.abort(415)
+        flask.abort(404)
 
 # ----------------------------------------
 #          Listeners - ctl
@@ -214,6 +208,7 @@ def process_preflight(machine_id, data):
     machine_status = db.lookup_by_id('machinestatus', machine_id)
     new = False
     if not machine_status:
+        machine_status = dict()
         choose_sync_type(data, machine_status, hostconfig, True)
         new = True
     else:
@@ -354,7 +349,7 @@ def main():
     setup_event_handler()
 
     if not os.environ.get('BATCH_SIZE'):
-        logging,warning(f'No batch size defined, using default: 50.')
+        logging.warning(f'No batch size defined, using default: 50.')
 
 
     # Use waitress to run flask
