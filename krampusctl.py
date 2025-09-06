@@ -28,8 +28,19 @@ def server_req(url, data, accept_any_response=False):
 # ----------------------------------------
 def replicate(data, server_url, limit):
     for collection in data:
-        collection_data = data[collection]
-        check_hostconfigs(collection_data)
+        # prep input collection data
+        collection_data = dict()
+        if collection == 'rules':
+            for row in data[collection]:
+                collection_data[row['identifier']] = row
+        else: 
+            #collection == 'hostconfigs':
+            for row in data[collection]:
+                if 'target' in row:
+                    collection_data[row['target']] = row
+                else:
+                    collection_data['all'] = row
+        # read from db
         url = server_url + f'/db-read/{collection}'
         req_result = server_req(url, {'limit': limit})
         req_result = process_rep_response(req_result)
@@ -41,10 +52,10 @@ def replicate(data, server_url, limit):
             req_result = server_req(url, {'limit': limit, 'cursor':req_result['cursor']})
             req_result = process_rep_response(req_result)
         # process last data chunk
-        collection_data = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}')
+        collection_data = process_replicate_chunk(req_result['data'], collection_data, collection, f'{server_url}/db-del/{collection}')
         # for collection add all missing data
-        for row in collection_data:
-            server_req(f'{server_url}/db-add/{collection}', row)
+        for row_id in collection_data:
+            server_req(f'{server_url}/db-add-edit/{collection}', collection_data[row_id])
 
 def process_rep_response(req_res):
     # if request contains json
@@ -57,24 +68,41 @@ def process_rep_response(req_res):
     logging.error('Unexpected response from server. Cannot continue.')
     sys.exit(1)
 
-def process_replicate_chunk(response_data, collection_data, del_url): 
+def process_replicate_chunk(response_data, collection_data, collection, del_url): 
     for row in response_data:
-        if row not in collection_data:
-            server_req(del_url, row)
+        if collection == 'rules':
+            if row['identifier'] not in collection_data:
+                server_req(del_url, row)
+            else:
+                del collection_data[row['identifier']]
         else:
-            collection_data.remove(row)
+            # collection == 'hostconfigs':
+            if 'target' in row:
+                if row['target'] not in collection_data:
+                    server_req(del_url, row) 
+                else:
+                    del collection_data[row['target']]
+            else:
+                if 'all' not in collection_data:
+                    server_req(del_url, row)
+                else:
+                    del collection_data['all']
     return collection_data
-
 
 def add(data, server_url):
     for collection in data:
         logging.debug(f'Adding to {collection}')
-        check_hostconfigs(data[collection])
         for row in data[collection]:
             req_result = server_req(f'{server_url}/db-add/{collection}', row)
             if 'already' in req_result.text:
                 logging.warning(req_result.text)
                 logging.debug(row)
+
+def edit(data, server_url):
+    for collection in data:
+        logging.debug(f'Editing {collection}')
+        for row in data[collection]:
+            req_result = server_req(f'{server_url}/db-edit/{collection}', row)
 
 def delete(data, server_url):
     for collection in data:
@@ -105,15 +133,45 @@ def delete_multiple(data, server_url):
 
 def check_hostconfigs(l):
     targets = []
+    count = 0
     for row in l:
         if 'target' in row:
             if row['target'] in targets:
                 # conflict
-                logging.error('Two hostconfigs have the same target. Please ensure there is only one hotconfig per target.')
+                logging.error(f'Two hostconfigs have the same target ({row["target"]}). Please ensure there is only one hostconfig per target.')
                 sys.etit(1)
             else:
                 targets += [row['target']]
+            if row['target'] == 'all':
+                count += 1
+        else:
+            count += 1
+    if count > 1:
+        logging.error('More than one ({count}) hostconfigs target "all". Please ensure there is only one hostconfig per target. Hostconfigs with no specified "target" key will default to targetting "all.')
+        sys.exit(1)
 
+def check_rules(l):
+    rule_ids = []
+    for rule in l:
+        # check for keys
+        rule_keys = set(rule.keys())
+        mandatory_keys = {'identifier', 'policy', 'rule_type',}
+        possible_keys = mandatory_keys.union({'custom_msg', 'custom_url', 'notification_app_name', 'cel_expr'})
+        if 'policy' in rule_keys and rule['policy'] == 'CEL':
+            mandatory_keys.add('cel_expr')
+        # are all mandatory keys present?
+        if not rule_keys.issuperset(mandatory_keys):
+            logging.error(f'Rule is missing mandatory key(s) {mandatory_keys.difference(rule_keys)}.')
+            logging.erro(f'Mandatory keys: {mandatory_keys}')
+            logging.error(f'Rule: {rule}')
+            sys.exit(1)
+        # are all present keys expected?
+        if not possible_keys.issuperset(rule_keys):
+            logging.error(f'Rule has unknown key(s) {rule_keys.difference(possible_keys)}.')
+            logging.erro(f'Possible keys: {possible_keys}')
+            logging.error(f'Rule: {rule}')
+            sys.exit(1)
+        rule_ids.append(rule['policy'])
 
 # ----------------------------------------
 #                 File reader
@@ -165,6 +223,13 @@ def check_valid_yaml_dict(data):
         sys.exit(1)
     for collection in data:
         collection_data = data[collection]
+        if collection == 'rules':
+            check_rules(collection_data)
+        elif collection == 'hostconfigs':
+            check_hostconfigs(collection_data)
+        else:
+            logging.error(f'Only "rules" and "hostconfigs" are valid collections. The top level key {collection} is not recognised.')
+            sys.exit(1)
         if type(collection_data) != list:
             logging.error(f'In the yaml for each collection, the value must be a list of rules or configurations. Instead the value has type {type(collection_data)}.')
             sys.exit(1)
@@ -200,7 +265,7 @@ def process_options():
                            help='remove all matches for this data from the database')
     parser.add_option('--limit', '-l', dest='limit', default=50,
                         help='limit for reading from database')
-    parser.add_option('--server', '-s', dest='server_url', default="http://0.0.0.0:3000",
+    parser.add_option('--server', '-s', dest='server_url', default="http://0.0.0.0:8000",
                         help='limit for reading from database')
     options, _ = parser.parse_args()
     return options.rep_path, options.add_path, options.del_path, options.del_path_m, int(options.limit), options.server_url

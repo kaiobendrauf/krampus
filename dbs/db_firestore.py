@@ -27,7 +27,7 @@ def setup():
 
 def add(collection: str, data: dict, row_id: str=None) -> tuple[int, str]:
     '''
-    Adds one row of data to the database, optionally at some specific row id. For the "rules" collection the date a rule is added is tracked.
+    Adds one row of data to the database, optionally at some specific row id. For the "rules" collection the datetime a rule is added is tracked.
 
     Parameters:
         collection: name of the collection to add data to
@@ -101,7 +101,7 @@ def read_new_rules(date: datetime, limit: int, cursor: str=None) -> dict:
 
 def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]:
     '''
-    Deletes data from the database that matches data given 
+    Deletes data from the database that matches data given. For the "rules" collection, the datetime of the last delete action is stored 
 
     Parameters:
         collection: name of the collection to add data to
@@ -113,6 +113,8 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
+    if collection == 'rules':
+        db.collection('machine_status').document('last_rule_delete').set({'date': datetime.now(timezone.utc)})
     docs = list(get_doc_by_match(collection, data))
     if len(docs) == 0:
         return 404, f'Data was not found in {collection} so could not be deleted.'
@@ -125,6 +127,14 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
         return 200, f'Multiple matches found in {collection}, all deleted.'
     else:
         return 400, f'Included data has more than one match in {collection}. Please check database and request manually.'
+
+def get_last_rule_delete() -> datetime:
+    # Gets the datetime the last delete action is stored, returns None if no deletion has ever occured 
+    doc = get_doc_by_id('machine_status', 'last_rule_delete')
+    if doc.exists:
+        return doc.to_dict()['date']
+    else:
+        return None
 
 def lookup_by_id(collection: str, row_id: str) -> dict:
     '''
@@ -160,7 +170,7 @@ def lookup(collection: str, data: dict) -> list:
 
 def edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
     '''
-    Edits specified row to match data
+    Edits specified row to match data. For the "rules" collection the datetime a rule is added / edited is tracked.
 
     Parameters:
         collection: name of the collection to edit
@@ -173,10 +183,30 @@ def edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
     '''
     doc = get_doc_by_id(collection, row_id)
     if doc.exists:
+        if collection == 'rules':
+            data['server_last_edit_date'] = datetime.now(timezone.utc)
         db.collection(collection).document(row_id).set(data)
         return 200, f'Entry {row_id} edited in {collection}'
     else:
         return 404, f"Data {row_id} not found in {collection}, so cannot be edited"
+
+def add_or_edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
+    '''
+    Edits one row of data to the database, or edits it if the row id already exists. For the "rules" collection the datetime a rule is added / edited is tracked.
+
+    Parameters:
+        collection: name of the collection to add data to
+        data: data for that row in the collection
+        row_id: desired id for new row in the collection
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    if collection == 'rules':
+        data['server_last_edit_date'] = datetime.now(timezone.utc)
+    db.collection(collection).document(row_id).set(data)
+    return 200, f'Entry added to (or edited in) {collection}'
 
 
 # --------------------------------------------------------------------------------
