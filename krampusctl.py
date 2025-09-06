@@ -259,6 +259,8 @@ def process_options():
                         help='copy this data to the database')
     parser.add_option('--add', '-a', dest='add_path',
                         help='add this data to the database, without creating duplicates')
+    parser.add_option('--edit', '-e', dest='edit_path',
+                        help='edit this data in the database')
     parser.add_option('--delete', '-d', dest='del_path',
                         help='remove this data from the database')
     parser.add_option('--deletemultiple', dest='del_path_m',
@@ -268,14 +270,14 @@ def process_options():
     parser.add_option('--server', '-s', dest='server_url', default="http://0.0.0.0:8000",
                         help='limit for reading from database')
     options, _ = parser.parse_args()
-    return options.rep_path, options.add_path, options.del_path, options.del_path_m, int(options.limit), options.server_url
+    return options.rep_path, options.add_path, options.edit_path, options.del_path, options.del_path_m, int(options.limit), options.server_url
 
 # ----------------------------------------
 #                 Main
 # ----------------------------------------
 def main():
     setup_logging()
-    rep_path, add_path, del_path, del_path_m, limit, server_url = process_options()
+    rep_path, add_path, edit_path, del_path, del_path_m, limit, server_url = process_options()
 
     if rep_path:
         data = read_input_file(rep_path)
@@ -283,12 +285,16 @@ def main():
     if add_path:
         data = read_input_file(add_path)
         add(data, server_url)
+    if edit_path:
+        data = read_input_file(edit_path)
+        edit(data, server_url)
     if del_path:
         data = read_input_file(del_path)
         delete(data, server_url)
     if del_path_m:
         data = read_input_file(del_path_m)
         delete_multiple(data, server_url)
+
 
 
 if __name__ == '__main__':
