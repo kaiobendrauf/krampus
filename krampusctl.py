@@ -12,16 +12,17 @@ import yaml
 #          server requests
 # ----------------------------------------
 def server_req(url, data, accept_any_response=False):
-    req_result = requests.post(url, json = data)
-    result = req_result
-    if accept_any_response or req_result.status_code < 300:
-        if not req_result.headers.get('content-type') == 'application/json':
-            logging.debug(req_result.text)
-        return req_result
-    else:
-        logging.error(f'Error {req_result.status_code}. {req_result.text}')
-        logging.error(f'Cannot continue.')
-        sys.exit(1)
+    for i in range(3):
+        req_result = requests.post(url, json = data)
+        result = req_result
+        if accept_any_response or req_result.status_code < 300:
+            if not req_result.headers.get('content-type') == 'application/json':
+                logging.debug(req_result.text)
+            return req_result
+        else:
+            logging.error(f'Error {req_result.status_code}. {req_result.text}')
+    logging.error(f'Cannot continue.')
+    sys.exit(1)
 
 # ----------------------------------------
 #               DB logic
@@ -255,16 +256,16 @@ def setup_logging():
 def process_options():
     parser = optparse.OptionParser()
     parser.set_usage('Usage: %prog [options]')
-    parser.add_option('--replicate', '-r', dest='rep_path',
+    parser.add_option('--apply', '-a', dest='rep_path',
                         help='copy this data to the database')
-    parser.add_option('--add', '-a', dest='add_path',
+    parser.add_option('--add', dest='add_path',
                         help='add this data to the database, without creating duplicates')
     parser.add_option('--edit', '-e', dest='edit_path',
-                        help='edit this data in the database')
+                        help='edit this data in the database, with the assumption that it exists')
     parser.add_option('--delete', '-d', dest='del_path',
-                        help='remove this data from the database')
+                        help='removes matches for the given data from the database, with the assumption that exactly one match will be found.')
     parser.add_option('--deletemultiple', dest='del_path_m',
-                           help='remove all matches for this data from the database')
+                           help='removes all matches for the given data from the database, with the assumption that at least one match will be found.')
     parser.add_option('--limit', '-l', dest='limit', default=50,
                         help='limit for reading from database')
     parser.add_option('--server', '-s', dest='server_url', default="http://0.0.0.0:8000",
@@ -294,8 +295,6 @@ def main():
     if del_path_m:
         data = read_input_file(del_path_m)
         delete_multiple(data, server_url)
-
-
 
 if __name__ == '__main__':
     main()
