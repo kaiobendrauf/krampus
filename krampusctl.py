@@ -13,7 +13,7 @@ import yaml
 # ----------------------------------------
 def server_req(url, data, accept_any_response=False):
     for i in range(3):
-        req_result = requests.post(url, json = data)
+        req_result = send_authenticated_request(url, data)
         result = req_result
         if accept_any_response or req_result.status_code < 300:
             if not req_result.headers.get('content-type') == 'application/json':
@@ -23,6 +23,17 @@ def server_req(url, data, accept_any_response=False):
             logging.error(f'Error {req_result.status_code}. {req_result.text}')
     logging.error(f'Cannot continue.')
     sys.exit(1)
+
+# ----------------------------------------
+#              auth logic
+# ----------------------------------------
+def send_authenticated_request(url, data):
+    if os.environ.get('CTL_SECRET'):
+        return requests.post(url, json=data, headers={'Krampus-Auth': os.environ.get('CTL_SECRET')})
+    elif os.environ.get('AUTH_HEADER_NAME') and os.environ.get('AUTH_HEADER_VALUE'):
+        return requests.post(url, json=data, headers={os.environ.get('AUTH_HEADER_NAME'): os.environ.get('AUTH_HEADER_VALUE')})
+    else:
+        return requests.post(url, json=data)
 
 # ----------------------------------------
 #               DB logic
@@ -191,7 +202,7 @@ def check_path_exists(path, exit=True):
         logging.error(f'Path {path} dpes not exist.')
         sys.exit(1)
     else:
-        logging.warning(f'Path {path} dpes not exist. Continueing without access')
+        logging.warning(f'Path {path} does not exist. Continueing without access')
         return False
 
 # ----------------------------------------

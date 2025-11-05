@@ -26,7 +26,7 @@ def send_events(data: list):
     print(f'Published messages with error handler to {topic_path}.')
 
 
-def setup():
+def setup(_):
     logging.debug("Running pubsub setup")
 	# Sets up the Pub/Sub connection, checking that environmental variables 'PUB_SUB_PROJ_ID' 'PUB_SUB_TOPIC_ID' and are found
     project_id = os.environ.get('PUB_SUB_PROJ_ID')

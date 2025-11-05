@@ -17,6 +17,38 @@ from waitress import serve
 server = flask.Flask(__name__)
 
 # ----------------------------------------
+#            Authentication
+# ----------------------------------------
+def setup_auth():
+    setup_sync_auth()
+    setup_ctl_auth()
+
+def setup_sync_auth():
+    global auth_sync
+    setup_data = None
+    if os.environ.get('SYNC_SECRET'):
+        # header auth
+        import auths.auth_header as auth_sync
+        setup_data = os.environ.get('SYNC_SECRET')
+    else:
+        logging.info('No valid authentication for syncs defined.')
+        import auths.auth_empty as auth_sync
+    auth_sync.setup(False, setup_data)
+
+def setup_ctl_auth():
+    global auth_ctl
+    setup_data = None
+    if os.environ.get('CTL_SECRET'):
+        # header auth
+        import auths.auth_header as auth_ctl
+        setup_data = os.environ.get('CTL_SECRET')
+    else:
+        logging.warning('No valid authentication for krampusctl defined. Make sure you are authenticating elsewhere.')
+        import auths.auth_empty as auth_ctl
+    auth_ctl.setup(True, setup_data)
+
+
+# ----------------------------------------
 #               Database
 # ----------------------------------------
 def setup_db():
@@ -103,10 +135,7 @@ def setup_event_handler():
         logging.warning(f'No event handler found. Events will not be processed.')
         import event_handlers.event_handler_empty as event_handler
 
-    if setup_data:
-        event_handler.setup(setup_data)
-    else:
-        event_handler.setup()
+    event_handler.setup(setup_data)
 
 # ----------------------------------------
 #          Listeners - Generic
@@ -128,45 +157,61 @@ def index():
 @server.route('/preflight/<machine_id>', methods=['POST'])
 def preflight(machine_id):
     logging.debug(f'preflight for {machine_id}')
-    data = get_request_data(flask.request)
-    result = process_preflight(machine_id, data)
-    # logging.debug(f'preflight result:\n{result}')
-    return result
+    if auth_sync.auth_sync(flask.request, machine_id):
+        data = get_request_data(flask.request)
+        result = process_preflight(machine_id, data)
+        # logging.debug(f'preflight result:\n{result}')
+        return result
+    else:
+        logging.warning(f'Attempted sync request (preflight) from {machine_id} failed because authentication failed.')
+        flask.abort(403)
     
 @server.route('/eventupload/<machine_id>', methods=['POST'])
 def eventupload(machine_id):
     logging.debug(f'eventupload for {machine_id}')
-    data = get_request_data(flask.request)
-    if 'events' in data:
-        result = event_handler.send_events(data['events'])
-        if result:
-            return result
-        return flask.Response(status=200)
+    if auth_sync.auth_sync(flask.request, machine_id):
+        data = get_request_data(flask.request)
+        if 'events' in data:
+            result = event_handler.send_events(data['events'])
+            if result:
+                return result
+            return flask.Response(status=200)
+        else:
+            flask.abort(400) 
     else:
-        flask.abort(400) 
+        logging.warning(f'Attempted sync request (eventupload) from {machine_id} failed because authentication failed.')
+        flask.abort(403)
 
 @server.route('/ruledownload/<machine_id>', methods=['POST'])
 def ruledownload(machine_id):
     logging.debug(f'ruledownload for {machine_id}')
-    data = get_request_data(flask.request)
-    machine_status = db.lookup_by_id('machinestatus', machine_id)
-    if machine_status:
-        result = process_ruledownload(machine_id, machine_status, data)
-        # logging.debug(f'ruledownload result:\n{result}')
-        return result
+    if auth_sync.auth_sync(flask.request, machine_id):
+        data = get_request_data(flask.request)
+        machine_status = db.lookup_by_id('machinestatus', machine_id)
+        if machine_status:
+            result = process_ruledownload(machine_id, machine_status, data)
+            # logging.debug(f'ruledownload result:\n{result}')
+            return result
+        else:
+            flask.abort(404)
     else:
-        flask.abort(404)
+        logging.warning(f'Attempted sync request (ruledownload) from {machine_id} failed because authentication failed.')
+        flask.abort(403)
 
 @server.route('/postflight/<machine_id>', methods=['POST'])
 def postflight(machine_id):
     logging.debug(f'postflight for {machine_id}')
-    data = get_request_data(flask.request)
-    machine_status = db.lookup_by_id('machinestatus', machine_id)
-    if machine_status:
-        process_postflight(machine_id, machine_status, data)
-        return flask.Response(status=200)
+    if auth_sync.auth_sync(flask.request, machine_id):
+        data = get_request_data(flask.request)
+        machine_status = db.lookup_by_id('machinestatus', machine_id)
+        if machine_status:
+            process_postflight(machine_id, machine_status, data)
+            return flask.Response(status=200)
+        else:
+            flask.abort(404)
     else:
-        flask.abort(404)
+        logging.warning(f'Attempted sync request (postflight) from {machine_id} failed because authentication failed.')
+        flask.abort(403)
 
 # ----------------------------------------
 #          Listeners - ctl
@@ -175,68 +220,92 @@ def postflight(machine_id):
 @server.route('/db-add/<collection>', methods=['POST'])
 def db_add(collection):
     logging.debug(f'add request for {collection}')
-    if flask.request.content_type == 'application/json':
-        data = flask.request.get_json()
-        status_code, text = add_to_db(collection, data)
-        return flask.Response(text, status=status_code)
+    if auth_ctl.auth_ctl(flask.request):
+        if flask.request.content_type == 'application/json':
+            data = flask.request.get_json()
+            status_code, text = add_to_db(collection, data)
+            return flask.Response(text, status=status_code)
+        else:
+            flask.abort(415)
     else:
-        flask.abort(415)
+        logging.warning(f'Attempted db-add request failed because authentication failed.')
+        flask.abort(403)
 
 @server.route('/db-add-edit/<collection>', methods=['POST'])
 def db_add_or_edit(collection):
     logging.debug(f'add/edit request for {collection}')
-    if flask.request.content_type == 'application/json':
-        data = flask.request.get_json()
-        status_code, text = add_edit_db(collection, data)
-        return flask.Response(text, status=status_code)
+    if auth_ctl.auth_ctl(flask.request):
+        if flask.request.content_type == 'application/json':
+            data = flask.request.get_json()
+            status_code, text = add_edit_db(collection, data)
+            return flask.Response(text, status=status_code)
+        else:
+            flask.abort(415)
     else:
-        flask.abort(415)
+        logging.warning(f'Attempted db-add-edit request failed because authentication failed.')
+        flask.abort(403)
 
 @server.route('/db-del/<collection>', methods=['POST'])
 def db_del(collection):
     logging.debug(f'del request for {collection}')
-    if flask.request.content_type == 'application/json':
-        data = flask.request.get_json()
-        status_code, text = db.delete(collection, data)
-        return flask.Response(text, status=status_code)
+    if auth_ctl.auth_ctl(flask.request):
+        if flask.request.content_type == 'application/json':
+            data = flask.request.get_json()
+            status_code, text = db.delete(collection, data)
+            return flask.Response(text, status=status_code)
+        else:
+            flask.abort(415)
     else:
-        flask.abort(415)
+        logging.warning(f'Attempted db-del request failed because authentication failed.')
+        flask.abort(403)
 
 @server.route('/db-del-multiple/<collection>', methods=['POST'])
 def db_del_multiple(collection):
     logging.debug(f'del mult request for {collection}')
-    if flask.request.content_type == 'application/json':
-        data = flask.request.get_json()
-        status_code, text = db.delete(collection, data, True)
-        return flask.Response(text, status=status_code)
+    if auth_ctl.auth_ctl(flask.request):
+        if flask.request.content_type == 'application/json':
+            data = flask.request.get_json()
+            status_code, text = db.delete(collection, data, True)
+            return flask.Response(text, status=status_code)
+        else:
+            flask.abort(415)
     else:
-        flask.abort(415)
+        logging.warning(f'Attempted db-del-multiple request failed because authentication failed.')
+        flask.abort(403)
 
 @server.route('/db-edit/<collection>', methods=['POST'])
 def db_edit(collection):
     logging.debug(f'edit request for {collection}')
-    if flask.request.content_type == 'application/json':
-        data = flask.request.get_json()
-        status_code, text = edit_db(collection, data)
-        return flask.Response(text, status=status_code)
+    if auth_ctl.auth_ctl(flask.request):
+        if flask.request.content_type == 'application/json':
+            data = flask.request.get_json()
+            status_code, text = edit_db(collection, data)
+            return flask.Response(text, status=status_code)
+        else:
+            flask.abort(415)
     else:
-        flask.abort(415)
+        logging.warning(f'Attempted db-edit request failed because authentication failed.')
+        flask.abort(403)
 
 @server.route('/db-read/<collection>', methods=['POST'])
 def db_read(collection):
     logging.debug(f'read request for {collection}')
-    if flask.request.content_type == 'application/json':
-        data = flask.request.get_json()
-        if 'limit' in data:
-            if 'cursor' in data:
-                result = db.read(collection, data['limit'], data['cursor'])
+    if auth_ctl.auth_ctl(flask.request):
+        if flask.request.content_type == 'application/json':
+            data = flask.request.get_json()
+            if 'limit' in data:
+                if 'cursor' in data:
+                    result = db.read(collection, data['limit'], data['cursor'])
+                else:
+                    result = db.read(collection, data['limit'])
+                return result
             else:
-                result = db.read(collection, data['limit'])
-            return result
+                flask.abort(400)
         else:
-            flask.abort(400)
+            flask.abort(415)
     else:
-        flask.abort(415)
+        logging.warning(f'Attempted db-read request failed because authentication failed.')
+        flask.abort(403)
 
 # ----------------------------------------
 #           SANTA Request Logic
@@ -318,7 +387,7 @@ def choose_sync_type(request, machine_status, hostconfig, new=False):
             hostconfig['sync_type'] = 'CLEAN'
         # clean sync will now be required until completed
         machine_status['clean_sync_by'] = datetime.now(timezone.utc)
-    elif 'sync_type' in hostconfig:
+    elif hostconfig and type(hostconfig) == dict and 'sync_type' in hostconfig:
         machine_status['sync_type'] = hostconfig['sync_type']
     else:
         machine_status['sync_type'] = 'NORMAL'
@@ -336,12 +405,12 @@ def has_clean_sync_since_delete(machine_status):
         return False
 
 def pick_future_clean_sync_by(machine_status):
-    min_days = os.environ.get('MIN_CLEAN_ALL_DAYS')
+    min_days = os.environ.get('MIN_CLEAN_SYNC_DAYS')
     if not min_days:
         min_days = 7
     else:
         min_days = int(min_days)
-    max_days = os.environ.get('MAX_CLEAN_ALL_DAYS')
+    max_days = os.environ.get('MAX_CLEAN_SYNC_DAYS')
     if not max_days:
         min_days = 13
     else:
@@ -429,6 +498,7 @@ def request_logging():
 def main():
     setup_logging()
     setup_db()
+    setup_auth()
     setup_event_handler()
 
     if not os.environ.get('BATCH_SIZE'):
