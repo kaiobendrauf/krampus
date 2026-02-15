@@ -3,3 +3,5 @@ google-cloud-firestore
 google-cloud-pubsub
 waitress
 pyyaml
+sqlalchemy
+mysql-connector-python
