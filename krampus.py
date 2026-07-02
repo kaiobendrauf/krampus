@@ -12,6 +12,8 @@ import zlib
 import flask
 from waitress import serve
 
+# from santa_classes import Event, Rule
+
 
 # Set up request listener
 server = flask.Flask(__name__)
@@ -53,9 +55,13 @@ def setup_ctl_auth():
 # ----------------------------------------
 def setup_db():
     global db
+    print(os.environ)
     if os.environ.get('GCP_PROJ_ID'):
         # firestore database
         import dbs.db_firestore as db
+    elif os.environ.get('MYSQL_HOST'):
+        # mysql database
+        import dbs.db_mysql as db
     else:
         logging.error('No valid db type given, unable to continue.')
         sys.exit(1)
@@ -193,6 +199,7 @@ def ruledownload(machine_id):
             # logging.debug(f'ruledownload result:\n{result}')
             return result
         else:
+            logging.warning(f'Attempted sync request (ruledownload) from {machine_id} failed because machine status for sync could not be found.')
             flask.abort(404)
     else:
         logging.warning(f'Attempted sync request (ruledownload) from {machine_id} failed because authentication failed.')
@@ -208,6 +215,7 @@ def postflight(machine_id):
             process_postflight(machine_id, machine_status, data)
             return flask.Response(status=200)
         else:
+            logging.warning(f'Attempted sync request (postflight) from {machine_id} failed because machine status for sync could not be found.')
             flask.abort(404)
     else:
         logging.warning(f'Attempted sync request (postflight) from {machine_id} failed because authentication failed.')
@@ -311,6 +319,8 @@ def db_read(collection):
 #           SANTA Request Logic
 # ----------------------------------------
 
+# data processing
+# ---------------
 def get_request_data(request):
     if request.content_type == 'application/json':
         if request.headers.get('Content-Encoding') == "deflate":
@@ -327,6 +337,8 @@ def decompress_data(data):
     decompressed_data = zlib.decompress(data)
     return json.loads(decompressed_data.decode('utf-8'))
 
+# preflight
+# ---------
 def process_preflight(machine_id, data):
     hostconfig = get_hostconfig(machine_id, data)
     # machine_status = data to be stored for other requests
@@ -417,6 +429,8 @@ def pick_future_clean_sync_by(machine_status):
         max_days = int(max_days)
     machine_status['clean_sync_by'] = datetime.now(timezone.utc) + timedelta(days=random.randint(min_days, max_days))
 
+# rule download
+# -------------
 def process_ruledownload(machine_id, machine_status, data):
     batch_size = os.environ.get('BATCH_SIZE')
     if not batch_size:
@@ -437,7 +451,8 @@ def process_ruledownload(machine_id, machine_status, data):
     db.edit('machinestatus', machine_status, machine_id)
     return result
 
-
+# postflight
+# ----------
 def process_postflight(machine_id, machine_status, data):
     if machine_status['n_rules_sent'] > 0:
         # check if rules received
@@ -445,9 +460,9 @@ def process_postflight(machine_id, machine_status, data):
             if data['rules_received'] == machine_status['n_rules_sent']:
                 if 'rules_processed' in data:
                     if data['rules_processed'] == data['rules_received']:
-                        # no warnings
+                        # successful sync
                         machine_status['last_check_in'] = datetime.now(timezone.utc)
-                        pass
+                        process_postflight_sync_type(machine_id, machine_status, data)
                     else:
                         logging.warning(f'{data["rules_received"]} rules received by {machine_id}, but {data["rules_processed"]} processed.')
                 else:
@@ -457,15 +472,22 @@ def process_postflight(machine_id, machine_status, data):
         else:
             logging.warning(f'no rules reported as received by {machine_id}, but {machine_status["n_rules_sent"]} sent.')
     else:
+        # successful sync
         machine_status['last_check_in'] = datetime.now(timezone.utc)
-    if 'syncType' in data and (data['syncType'] == 'CLEAN' or data['syncType'] == 'CLEAN_ALL'):
-        logging.debug(f'Clean sync for {machine_id} succesfull.')
-        pick_future_clean_sync_by(machine_status)
-        logging.debug(f'Updating clean_sync_by date for {machine_id}.')
-        machine_status['last_clean_sync'] = datetime.now(timezone.utc)
+        process_postflight_sync_type(machine_id, machine_status, data)
     machine_status['n_rules_sent'] = 0
     db.edit('machinestatus', machine_status, machine_id)
 
+def process_postflight_sync_type(machine_id, machine_status, data):
+    if 'syncType' in data and (data['syncType'] == 'CLEAN' or data['syncType'] == 'CLEAN_ALL'):
+        logging.debug(f'Clean sync for {machine_id} succesfull.')
+        pick_future_clean_sync_by(machine_status)
+        logging.debug(f'Updating clean_sync_by date for {machine_id} to {datetime.now(timezone.utc)}.')
+        machine_status['last_clean_sync'] = datetime.now(timezone.utc)
+
+# ----------------------------------------
+#          Request Verification
+# ----------------------------------------
 
 # ----------------------------------------
 #                 Logging

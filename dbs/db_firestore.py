@@ -6,12 +6,14 @@ import uuid
 from datetime import datetime, timezone
 from google.cloud import firestore
 
+is_event_handler = True
+
 # --------------------------------------------------------------------------------
 #                                Required Functions
 # --------------------------------------------------------------------------------
 
 def setup():
-    # Sets up the database object, checking that environmental variables 'GCP_PROJ_ID' 'DB_NAME' and are found
+    # Sets up the database object, checking that environmental variables 'GCP_PROJ_ID', and 'DB_NAME' are found
     gcp_proj_id = os.environ.get('GCP_PROJ_ID')
     db_name = os.environ.get('DB_NAME')
 

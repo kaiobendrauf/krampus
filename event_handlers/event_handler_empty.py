@@ -2,10 +2,10 @@
 #                                Required Functions
 # --------------------------------------------------------------------------------
 def send_events(data: list):
-	return 
+    return 
 
 def setup(_):
-	return
+    return
 
 # --------------------------------------------------------------------------------
 #                                Helper Functions

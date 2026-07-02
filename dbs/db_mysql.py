@@ -3,59 +3,49 @@ import os
 import sys
 
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, text, String, Integer, Boolean
-from sqlalchemy.dialects.mysql import VARCHAR, DATETIME
-from sqlalchemy.orm import DeclarativeBase, Mapped
-from sqlalchemy.testing.schema import mapped_column
+
+from . import sqlalchemy_util 
 
 db = None
 
-def setup():
-    """
-    Creates a MySQL client, and stores it as a global variable.
+is_event_handler = True
 
-    Requires the following environment variables to be set:
-    - DB_NAME
-    - DB_USER
-    - DB_PASSWORD
-    - DB_HOST
-    """
+# --------------------------------------------------------------------------------
+#                                Required Functions
+# --------------------------------------------------------------------------------
+
+def setup():
+    # Sets up the database object, checking that environmental variables 'MYSQL_HOST', 'DB_NAME', MYSQL_USER, and MYSQL_PW are found
+
+    db_host = os.environ.get('MYSQL_HOST')
     db_name = os.environ.get('DB_NAME')
-    db_host = os.environ.get('MYSQL_DB_HOST')
-    db_port = os.environ.get('MYSQL_DB_PORT')
-    db_user = os.environ.get('MYSQL_DB_USER')
-    db_password = os.environ.get('MYSQL_DB_PASSWORD')
+    db_port = os.environ.get('MYSQL_PORT')
+    db_user = os.environ.get('MYSQL_USER')
+    db_password = os.environ.get('MYSQL_PW')
 
     if not db_name:
         logging.error('You need to specify the database name to use, using the "DB_NAME" environment variable.')
         sys.exit(1)
-
     if not db_host:
         logging.error('You need to specify the database host to use, using the "DB_HOST" environment variable.')
         sys.exit(1)
-
     if not db_port:
         # default to 3306
         db_port = 3306
-
     if not db_user:
         logging.error('You need to specify the MySQL user to use, using the "DB_USER" environment variable.')
         sys.exit(1)
-
     if not db_password:
         logging.error(
             'You need to specify the password for your MySQL user, using the "DB_PASSWORD" environment variable.')
         sys.exit(1)
 
     connection_string = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-    engine = create_engine(connection_string, echo=True)
-
-    global db
-    db = engine
+    sqlalchemy_util.setup_engine(connection_string)
 
 
-def add(table: str, data: dict, row_id: str = None) -> tuple[int, str]:
-    """
+def add(collection: str, data: dict, row_id: str = None) -> tuple[int, str]:
+    '''
     Adds one row of data to the database, optionally at some specific row id. For the "rules" collection, the datetime a rule is added is tracked.
 
     Parameters:
@@ -66,9 +56,10 @@ def add(table: str, data: dict, row_id: str = None) -> tuple[int, str]:
     Returns:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
-    """
-    if table == 'rules':
-        data['server_last_edit_date'] = datetime.now(timezone.utc)
+    '''
+    sqlalchemy_util.add(collection, data, row_id)
+    # if table == 'rules':
+    #     data['server_last_edit_date'] = datetime.now(timezone.utc)
     # if row_id:
     #     if db:
     #         with db.connect() as conn:
@@ -96,6 +87,7 @@ def read(collection: str, limit: int, cursor: str = None) -> dict:
     Returns:
         dict: dict containing list of data (key="data") and optionally a cursor (key="cursor") if there is more data to read
     '''
+    sqlalchemy_util.read(collection, limit, cursor)
     # data, cursor = get_all_docs(collection, limit, cursor)
     # if data:
     #     if collection == 'rules':
@@ -121,6 +113,7 @@ def read_new_rules(date: datetime, limit: int, cursor: str = None) -> dict:
     Returns:
         dict: dict containing list of rules (key="rules") and optionally a cursor (key="cursor") if there is more data to read
     '''
+    sqlalchemy_util.read(date, limit, cursor)
     # data, cursor = get_all_docs_by_filter('rules', [('server_last_edit_date', '>', date)], limit=limit, cursor=cursor)
     # if data:
     #     # this data has server added fields that need to be removed
@@ -148,6 +141,7 @@ def delete(collection: str, data: dict, multiple: bool = False) -> tuple[int, st
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
+    sqlalchemy_util.read(collection, data, multiple)
     # if collection == 'rules':
     #     db.collection('machine_status').document('last_rule_delete').set({'date': datetime.now(timezone.utc)})
     # docs = list(get_doc_by_match(collection, data))
@@ -165,7 +159,8 @@ def delete(collection: str, data: dict, multiple: bool = False) -> tuple[int, st
 
 
 def get_last_rule_delete() -> datetime:
-    # Gets the datetime the last delete action is stored, returns None if no deletion has ever occured 
+    # Gets the datetime the last delete action is stored, returns None if no deletion has ever occured
+    sqlalchemy_util.get_last_rule_delete() 
     # doc = get_doc_by_id('machine_status', 'last_rule_delete')
     # if doc.exists:
     #     return doc.to_dict()['date']
@@ -185,6 +180,8 @@ def lookup_by_id(collection: str, row_id: str) -> dict:
         dict: dict containing data at the given row id
               returns None if no such row is found
     '''
+    sqlalchemy_util.lookup_by_id(collection, row_id) 
+
     # result = get_doc_by_id(collection, row_id)
     # if not result.exists:
     #     return None
@@ -202,6 +199,7 @@ def lookup(collection: str, data: dict) -> list:
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data
     '''
+    sqlalchemy_util.lookup(collection, data) 
     # result = list(get_doc_by_match(collection, data))
     # result = [doc.to_dict() for doc in result]
     # return result
@@ -220,6 +218,7 @@ def edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
+    sqlalchemy_util.edit(collection, data, row_id) 
     # doc = get_doc_by_id(collection, row_id)
     # if doc.exists:
     #     if collection == 'rules':
@@ -243,43 +242,13 @@ def add_or_edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
+    sqlalchemy_util.add_or_edit(collection, data, row_id) 
     # if collection == 'rules':
     #     data['server_last_edit_date'] = datetime.now(timezone.utc)
     # db.collection(collection).document(row_id).set(data)
     # return 200, f'Entry added to (or edited in) {collection}'
 
-"""
-ORM Types
-"""
+# --------------------------------------------------------------------------------
+#                                Helper Functions
+# --------------------------------------------------------------------------------
 
-class BaseClass(DeclarativeBase):
-    pass
-
-class Rule(BaseClass):
-    __tablename__ = "rules"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    cel_expr: Mapped[str] = mapped_column(String(255))
-    custom_msg: Mapped[str] = mapped_column(String(255))
-    custom_url: Mapped[str] = mapped_column(String(255))
-    identifier: Mapped[str] = mapped_column(String(255))
-    notification_app_name: Mapped[str] = mapped_column(String(255))
-    policy: Mapped[str] = mapped_column(String(255))
-    rule_type: Mapped[str] = mapped_column(String(255))
-    server_last_edit_date: Mapped[datetime] = mapped_column(DATETIME)
-
-class HostClass(BaseClass):
-    __tablename__ = "hostconfigs"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    allowed_path_regex: Mapped[str] = mapped_column(String(255))
-    batch_size: Mapped[int] = mapped_column(Integer)
-    block_usb_mount: Mapped[bool] = mapped_column(Boolean)
-    disable_unknown_event_upload: Mapped[bool] = mapped_column(Boolean)
-    enable_all_event_upload: Mapped[bool] = mapped_column(Boolean)
-    enable_bundles: Mapped[bool] = mapped_column(Boolean)
-    enable_transitive_rules: Mapped[bool] = mapped_column(Boolean)
-    full_sync_interval: Mapped[int] = mapped_column(Integer)
-    override_file_access_action: Mapped[str] = mapped_column(String)
-    push_notification_full_sync_interval: Mapped[int] = mapped_column(Integer)
-    push_notification_global_rule_sync_deadline: Mapped[int] = mapped_column(Integer)
