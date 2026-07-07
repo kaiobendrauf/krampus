@@ -5,3 +5,4 @@ waitress
 pyyaml
 sqlalchemy
 mysql-connector-python
+psycopg

@@ -48,9 +48,9 @@ class HostClass(Base):
 
 # class Event(Base):
 #     __tablename__ = "events_full"
-
 #     id: Mapped[int] = mapped_column(primary_key=True)
 #     file_sha256:
+
 
 
 def setup_engine(connection_string, echo=True):
