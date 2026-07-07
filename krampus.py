@@ -62,9 +62,9 @@ def setup_db():
     elif os.environ.get('MYSQL_HOST'):
         # mysql database
         import dbs.db_mysql as db
-    elif os.environ.get('POSGRES_HOST'):
+    elif os.environ.get('POSTGRES_HOST'):
         # postgres database
-		import dbs.db_psql as db
+        import dbs.db_psql as db
     else:
         logging.error('No valid db type given, unable to continue.')
         sys.exit(1)
