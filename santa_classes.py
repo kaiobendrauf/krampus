@@ -157,133 +157,132 @@ class ExportConfiguration():
     signed_post: SignedPost
 
 
-# @dataclass
-# class HostConfig():
-#     client_mode: ClientMode
-#     sync_type: SyncType = None
-#     batch_size: int
-#     enable_bundles: bool = None
-#     enable_transitive_rules: bool = None
-#     enable_all_event_upload: bool = None
-#     disable_unknown_event_upload: bool = None
-#     full_sync_interval_seconds: int
-#     push_notification_full_sync_interval_seconds: int
-#     push_notification_global_rule_sync_deadline_seconds: int
-#     allowed_path_regex: str = None
-#     blocked_path_regex: str = None
-#     block_usb_mount: bool
-#     remount_usb_mode: list[str]
-#     override_file_access_action: FileAccessAction = None
-#     export_configuration: ExportConfiguration = None
-#     push_token: str
-#     push_issuer_token: str
-#     event_detail_url: str = None
-#     event_detail_text: str = None
-
-#     def __post_init__(self):
-#         self.client_mode = ClientMode(**self.client_mode)
-#         if self.sync_type != None:
-#             self.sync_type = SyncType(**self.sync_type)
-#         if self.override_file_access_action != None:
-#             self.override_file_access_action = FileAccessAction(**self.override_file_access_action)
-#         if self.export_configuration != None:
-#             self.export_configuration = ExportConfiguration(**self.export_configuration)
+@dataclass
+class HostConfig():
+    client_mode: ClientModes
+    batch_size: int
+    full_sync_interval_seconds: int
+    push_notification_full_sync_interval_seconds: int
+    push_notification_global_rule_sync_deadline_seconds: int
+    block_usb_mount: bool
+    remount_usb_mode: list[str]
+    push_token: str
+    push_issuer_token: str
+    sync_type: SyncType = None
+    enable_bundles: bool = None
+    enable_transitive_rules: bool = None
+    enable_all_event_upload: bool = None
+    disable_unknown_event_upload: bool = None
+    allowed_path_regex: str = None
+    blocked_path_regex: str = None
+    override_file_access_action: FileAccessAction = None
+    export_configuration: ExportConfiguration = None
+    event_detail_url: str = None
+    event_detail_text: str = None
 
 
-#         if ((not all(isinstance(i, str) for i in [self.push_token, self.push_issuer_token])) or
-#             (not all(isinstance(i, (str, type(None))) for i in [self.allowed_path_regex, self.blocked_path_regex, self.event_detail_url, self.event_detail_text])) or
-#             (not isinstance(self.remount_usb_mode, list[str]))
-#             (not all(isinstance(i, int) for i in [self.batch_size, self.full_sync_interval_seconds, self.push_notification_full_sync_interval_seconds, self.push_notification_global_rule_sync_deadline_seconds])) or
-#             (not all(isinstance(i, bool) for i in [self.block_usb_mount])) or
-#             (not all(isinstance(i, (bool, type(None))) for i in [self.enable_bundles, self.enable_transitive_rules, self.enable_all_event_upload, self.disable_unknown_event_upload]))):
-#                 raise Excaption("Could not init Event, wrong data type given.")
+    def __post_init__(self):
+        self.client_mode = ClientMode(**self.client_mode)
+        if self.sync_type != None:
+            self.sync_type = SyncType(**self.sync_type)
+        if self.override_file_access_action != None:
+            self.override_file_access_action = FileAccessAction(**self.override_file_access_action)
+        if self.export_configuration != None:
+            self.export_configuration = ExportConfiguration(**self.export_configuration)
 
 
-# @dataclass
-# class Rule():
-#     identifier: str
-#     policy: Policy
-#     rule_type: RuleType
-#     custom_msg: str = None
-#     custom_url: str = None
-#     notification_app_name: str = None
-#     cel_expr: str = None
-
-#     def __post_init__(self):
-#         self.policy = Policy(self.policy)
-#         self.rule_type = RuleType(self.rule_type)
-
-#         if ((not all(isinstance(i, str) for i in [self.identifier, self.custom_msg, self.custom_url, self.notification_app_name, self.cel_expr])) or
-#             (not all(isinstance(i, (str, type(None))) for i in [self.custom_msg, self.custom_url, self.notification_app_name, self.cel_expr]))):
-#             raise Excaption("Could not init Rule, wrong data type given.")
+        if ((not all(isinstance(i, str) for i in [self.push_token, self.push_issuer_token])) or
+            (not all(isinstance(i, (str, type(None))) for i in [self.allowed_path_regex, self.blocked_path_regex, self.event_detail_url, self.event_detail_text])) or
+            (not isinstance(self.remount_usb_mode, list[str]))
+            (not all(isinstance(i, int) for i in [self.batch_size, self.full_sync_interval_seconds, self.push_notification_full_sync_interval_seconds, self.push_notification_global_rule_sync_deadline_seconds])) or
+            (not all(isinstance(i, bool) for i in [self.block_usb_mount])) or
+            (not all(isinstance(i, (bool, type(None))) for i in [self.enable_bundles, self.enable_transitive_rules, self.enable_all_event_upload, self.disable_unknown_event_upload]))):
+                raise Excaption("Could not init Event, wrong data type given.")
 
 
-# @dataclass
-# class SignedPost():
-#     url: str
-#     form_values: dict[str, str]
+@dataclass
+class Rule():
+    identifier: str
+    policy: Policy
+    rule_type: RuleType
+    custom_msg: str = None
+    custom_url: str = None
+    notification_app_name: str = None
+    cel_expr: str = None
 
-#     def __post_init__(self):
-#         if ((not all(isinstance(i, str) for i in [self.url])) or
-#             (not all(isinstance(i, dict[str, str]) for i in [self.form_values]))):
-#             raise Excaption("Could not init SignedPost, wrong data type given.")
+    def __post_init__(self):
+        self.policy = Policy(self.policy)
+        self.rule_type = RuleType(self.rule_type)
+
+        if ((not all(isinstance(i, str) for i in [self.identifier, self.custom_msg, self.custom_url, self.notification_app_name, self.cel_expr])) or
+            (not all(isinstance(i, (str, type(None))) for i in [self.custom_msg, self.custom_url, self.notification_app_name, self.cel_expr]))):
+            raise Excaption("Could not init Rule, wrong data type given.")
 
 
+@dataclass
+class SignedPost():
+    url: str
+    form_values: dict[str, str]
+
+    def __post_init__(self):
+        if ((not all(isinstance(i, str) for i in [self.url])) or
+            (not all(isinstance(i, dict[str, str]) for i in [self.form_values]))):
+            raise Excaption("Could not init SignedPost, wrong data type given.")
+
+
+# ----------------------------------------
+# #       Krampus Database Classes
 # # ----------------------------------------
-# # #       Krampus Database Classes
-# # # ----------------------------------------
-# @dataclass
-# class EventSummary():
-#     file_name: str
-#     DECISION_UNKNOWN: int = None
-#     ALLOW_UNKNOWN: int = None
-#     ALLOW_BINARY: int = None
-#     ALLOW_CERTIFICATE: int = None
-#     ALLOW_SCOPE: int = None
-#     ALLOW_TEAMID: int = None
-#     ALLOW_SIGNINGID: int = None
-#     ALLOW_CDHASH: int = None
-#     BLOCK_UNKNOWN: int = None
-#     BLOCK_BINARY: int = None
-#     BLOCK_CERTIFICATE: int = None
-#     BLOCK_SCOPE: int = None
-#     BLOCK_TEAMID: int = None
-#     BLOCK_SIGNINGID: int = None
-#     BLOCK_CDHASH: int = None
-#     BUNDLE_BINARY: int = None
+@dataclass
+class EventSummary():
+    file_name: str
+    DECISION_UNKNOWN: int = None
+    ALLOW_UNKNOWN: int = None
+    ALLOW_BINARY: int = None
+    ALLOW_CERTIFICATE: int = None
+    ALLOW_SCOPE: int = None
+    ALLOW_TEAMID: int = None
+    ALLOW_SIGNINGID: int = None
+    ALLOW_CDHASH: int = None
+    BLOCK_UNKNOWN: int = None
+    BLOCK_BINARY: int = None
+    BLOCK_CERTIFICATE: int = None
+    BLOCK_SCOPE: int = None
+    BLOCK_TEAMID: int = None
+    BLOCK_SIGNINGID: int = None
+    BLOCK_CDHASH: int = None
+    BUNDLE_BINARY: int = None
 
-#     def __post_init__(self):
-#         if ((not all(isinstance(i, str) for i in [self.file_name])) or
-#             (not all(isinstance(i, (int, type(None))) for i in [self.DECISION_UNKNOWN, self.ALLOW_UNKNOWN, self.ALLOW_BINARY, self.ALLOW_CERTIFICATE, self.ALLOW_SCOPE, self.ALLOW_TEAMID, self.ALLOW_SIGNINGID, self.ALLOW_CDHASH, self.BLOCK_UNKNOWN, self.BLOCK_BINARY, self.BLOCK_CERTIFICATE, self.BLOCK_SCOPE, self.BLOCK_TEAMID, self.BLOCK_SIGNINGID, self.BLOCK_CDHASH, self.BUNDLE_BINARY]))):
-#             raise Excaption("Could not init EventSummary, wrong data type given.")
+    def __post_init__(self):
+        if ((not all(isinstance(i, str) for i in [self.file_name])) or
+            (not all(isinstance(i, (int, type(None))) for i in [self.DECISION_UNKNOWN, self.ALLOW_UNKNOWN, self.ALLOW_BINARY, self.ALLOW_CERTIFICATE, self.ALLOW_SCOPE, self.ALLOW_TEAMID, self.ALLOW_SIGNINGID, self.ALLOW_CDHASH, self.BLOCK_UNKNOWN, self.BLOCK_BINARY, self.BLOCK_CERTIFICATE, self.BLOCK_SCOPE, self.BLOCK_TEAMID, self.BLOCK_SIGNINGID, self.BLOCK_CDHASH, self.BUNDLE_BINARY]))):
+            raise Excaption("Could not init EventSummary, wrong data type given.")
 
 
-# @dataclass
-# class MachineStatus():
-#     clean_sync_by: datetime.Datetime
-#     last_check_in: datetime.Datetime = None
-#     last_clean_sync: datetime.Datetime = None
-#     n_rules_sent: int
-#     sync_type: SyncType
+@dataclass
+class MachineStatus():
+    clean_sync_by: datetime.Datetime
+    n_rules_sent: int
+    sync_type: SyncType
+    last_check_in: datetime.Datetime = None
+    last_clean_sync: datetime.Datetime = None
 
-#     def __post_init__(self):
-#         self.sync_type = SyncType(self.SyncType)
+    def __post_init__(self):
+        self.sync_type = SyncType(self.SyncType)
 
-#         if ((not all(isinstance(i, datetime.Datetime) for i in [self.clean_sync_by])) or
-#             (not all(isinstance(i, (datetime.Datetime, type(None))) for i in [self.last_check_in, self.last_clean_sync])) or
-#             (not all(isinstance(i, int) for i in [self.n_rules_sent]))):
-#             raise Excaption("Could not init MachineStatus, wrong data type given.")
+        if ((not all(isinstance(i, datetime.Datetime) for i in [self.clean_sync_by])) or
+            (not all(isinstance(i, (datetime.Datetime, type(None))) for i in [self.last_check_in, self.last_clean_sync])) or
+            (not all(isinstance(i, int) for i in [self.n_rules_sent]))):
+            raise Excaption("Could not init MachineStatus, wrong data type given.")
 
+@dataclass
+class KrampusRule(Rule):
+    pass
 
+@dataclass
+class KrampusHostConfig(HostConfig):
+    target: str = "all"
 
-# @dataclass
-# class KrampusRule(Rule):
-#     pass
-
-# @dataclass
-# class KrampusHostConfig(Rule):
-#     target: str
-
-#     def __post_init__(self):
-#         if (not all(isinstance(i, str) for i in [self.target])):
-#             raise Excaption("Could not init KrampusHostConfig, wrong data type given.")
+    def __post_init__(self):
+        if (not all(isinstance(i, str) for i in [self.target])):
+            raise Excaption("Could not init KrampusHostConfig, wrong data type given.")

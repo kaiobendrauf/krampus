@@ -46,11 +46,11 @@ class HostClass(Base):
     push_notification_full_sync_interval: Mapped[int] = mapped_column(Integer)
     push_notification_global_rule_sync_deadline: Mapped[int] = mapped_column(Integer)
 
-class Event(Base):
-    __tablename__ = "events_full"
+# class Event(Base):
+#     __tablename__ = "events_full"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    file_sha256:
+#     id: Mapped[int] = mapped_column(primary_key=True)
+#     file_sha256:
 
 
 def setup_engine(connection_string, echo=True):
@@ -68,7 +68,7 @@ def setup():
     return
 
 
-# def add(table: str, data: dict, row_id: str = None) -> tuple[int, str]:
+def add(collection: str, data: dict, row_id: str = None) -> tuple[int, str]:
 #     '''
 #     Adds one row of data to the database, optionally at some specific row id. For the "rules" collection, the datetime a rule is added is tracked.
 

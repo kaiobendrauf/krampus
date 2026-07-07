@@ -8,7 +8,8 @@ from . import sqlalchemy_util
 
 db = None
 
-is_event_handler = True
+is_full_event_handler = False
+is_summary_event_handler = False
 
 # --------------------------------------------------------------------------------
 #                                Required Functions
