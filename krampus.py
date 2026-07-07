@@ -12,7 +12,7 @@ import zlib
 import flask
 from waitress import serve
 
-# from santa_classes import Event, Rule
+from santa_classes import Event, Rule
 
 
 # Set up request listener
@@ -55,7 +55,7 @@ def setup_ctl_auth():
 # ----------------------------------------
 def setup_db():
     global db
-    print(os.environ)
+    # print(os.environ)
     if os.environ.get('GCP_PROJ_ID'):
         # firestore database
         import dbs.db_firestore as db
@@ -129,12 +129,12 @@ def setup_event_handler():
         # pub sub event handler
         logging.info("Using Pub/Sub as the event handler.")
         import event_handlers.event_handler_pubsub as event_handler
-    elif os.environ.get('KRAMPUS_EVENT_HANDLER_FULL'):
+    elif os.environ.get('KRAMPUS_EVENT_HANDLER_FULL') and db.is_full_event_handler:
         # full events published to krampus' database
         logging.info("Using Krampus' database as the event handler, to store full events.")
         import event_handlers.event_handler_krampus_full as event_handler
         setup_data = db
-    elif os.environ.get('KRAMPUS_EVENT_HANDLER_SUMMARY'):
+    elif os.environ.get('KRAMPUS_EVENT_HANDLER_SUMMARY')and db.is_summary_event_handler:
         # summaries of events published to krampus' database
         logging.info("Using Krampus' database as the event handler, to store summarised events.")
         import event_handlers.event_handler_krampus_summary as event_handler

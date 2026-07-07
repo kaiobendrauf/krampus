@@ -6,7 +6,8 @@ import uuid
 from datetime import datetime, timezone
 from google.cloud import firestore
 
-is_event_handler = True
+is_full_event_handler = True
+is_summary_event_handler = True
 
 # --------------------------------------------------------------------------------
 #                                Required Functions
