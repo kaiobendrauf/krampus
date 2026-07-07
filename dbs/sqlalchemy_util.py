@@ -3,8 +3,8 @@ import os
 import sys
 
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, text, String, Integer, Boolean
-from sqlalchemy.dialects.mysql import VARCHAR, DATETIME
+from sqlalchemy import create_engine, text, String, Integer, Boolean, DateTime
+from sqlalchemy.dialects.mysql import VARCHAR
 from sqlalchemy.orm import DeclarativeBase, Mapped
 from sqlalchemy.testing.schema import mapped_column
 
@@ -28,7 +28,7 @@ class Rule(Base):
     notification_app_name: Mapped[str] = mapped_column(String(255))
     policy: Mapped[str] = mapped_column(String(255))
     rule_type: Mapped[str] = mapped_column(String(255))
-    server_last_edit_date: Mapped[datetime] = mapped_column(DATETIME)
+    server_last_edit_date: Mapped[datetime] = mapped_column(DateTime())
 
 class HostClass(Base):
     __tablename__ = "hostconfigs"
@@ -81,8 +81,8 @@ def add(collection: str, data: dict, row_id: str = None) -> tuple[int, str]:
 #         int: http status code reflecting the success of the attempted action
 #         str: description of action taken
 #     '''
-#     if table == 'rules':
-#         data['server_last_edit_date'] = datetime.now(timezone.utc)
+    if collection == 'rules':
+        data['server_last_edit_date'] = datetime.now(timezone.utc)
 #     # if row_id:
 #     #     if db:
 #     #         with db.connect() as conn:
