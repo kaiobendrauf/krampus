@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
-import json
 import logging
-import optparse
+import argparse
 import os
 import requests
 import sys
@@ -59,7 +58,7 @@ def replicate(data, server_url, limit):
         while 'cursor' in req_result:
             # still reading
             # process data (note data that does not need to be added, delete what needs to be deleted)
-            collection_data = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}')
+            collection_data = process_replicate_chunk(req_result['data'], collection_data, collection, f'{server_url}/db-del/{collection}')
             # get new data
             req_result = server_req(url, {'limit': limit, 'cursor':req_result['cursor']})
             req_result = process_rep_response(req_result)
@@ -151,7 +150,7 @@ def check_hostconfigs(l):
             if row['target'] in targets:
                 # conflict
                 logging.error(f'Two hostconfigs have the same target ({row["target"]}). Please ensure there is only one hostconfig per target.')
-                sys.etit(1)
+                sys.exit(1)
             else:
                 targets += [row['target']]
             if row['target'] == 'all':
@@ -174,13 +173,13 @@ def check_rules(l):
         # are all mandatory keys present?
         if not rule_keys.issuperset(mandatory_keys):
             logging.error(f'Rule is missing mandatory key(s) {mandatory_keys.difference(rule_keys)}.')
-            logging.erro(f'Mandatory keys: {mandatory_keys}')
+            logging.error(f'Mandatory keys: {mandatory_keys}')
             logging.error(f'Rule: {rule}')
             sys.exit(1)
         # are all present keys expected?
         if not possible_keys.issuperset(rule_keys):
             logging.error(f'Rule has unknown key(s) {rule_keys.difference(possible_keys)}.')
-            logging.erro(f'Possible keys: {possible_keys}')
+            logging.error(f'Possible keys: {possible_keys}')
             logging.error(f'Rule: {rule}')
             sys.exit(1)
         rule_ids.append(rule['policy'])
@@ -194,11 +193,12 @@ def read_input_file(path):
         return process_yaml(path)
     else:
         logging.error(f'File {path} is not a type of file this script is able to process. Please provide a yaml file.')
+        sys.exit(1)
 
-def check_path_exists(path, exit=True):
+def check_path_exists(path, should_exit=True):
     if os.path.exists(path):
         return True
-    elif exit:
+    elif should_exit:
         logging.error(f'Path {path} dpes not exist.')
         sys.exit(1)
     else:
@@ -247,7 +247,7 @@ def check_valid_yaml_dict(data):
             sys.exit(1)
         for el in collection_data:
             if type(el) != dict:
-                logging.error(f'In the yaml for each collection, the value must be a list of rules or configurations, which must have type dict. Instead the elements of {key}s have type {type(el)}.')
+                logging.error(f'In the yaml for each collection, the value must be a list of rules or configurations, which must have type dict. Instead the elements of {collection}s have type {type(el)}.')
                 sys.exit(1)
 
 # ----------------------------------------
@@ -264,32 +264,34 @@ def setup_logging():
 # ----------------------------------------
 #                 Options
 # ----------------------------------------
-def process_options():
-    parser = optparse.OptionParser()
-    parser.set_usage('Usage: %prog [options]')
-    parser.add_option('--apply', '-a', dest='rep_path',
+def process_args():
+    parser = argparse.ArgumentParser(
+		description='krampusctl is a command-line tool for applying configuration to a krampus server.',
+		usage='%(prog)s [options]'
+	)
+    parser.add_argument('--apply', '-a', dest='rep_path',
                         help='copy this data to the database')
-    parser.add_option('--add', dest='add_path',
+    parser.add_argument('--add', dest='add_path',
                         help='add this data to the database, without creating duplicates')
-    parser.add_option('--edit', '-e', dest='edit_path',
+    parser.add_argument('--edit', '-e', dest='edit_path',
                         help='edit this data in the database, with the assumption that it exists')
-    parser.add_option('--delete', '-d', dest='del_path',
+    parser.add_argument('--delete', '-d', dest='del_path',
                         help='removes matches for the given data from the database, with the assumption that exactly one match will be found.')
-    parser.add_option('--deletemultiple', dest='del_path_m',
+    parser.add_argument('--deletemultiple', dest='del_path_m',
                            help='removes all matches for the given data from the database, with the assumption that at least one match will be found.')
-    parser.add_option('--limit', '-l', dest='limit', default=50,
+    parser.add_argument('--limit', '-l', dest='limit', default=50,
+                        help='limit for reading from database', type=int)
+    parser.add_argument('--server', '-s', dest='server_url', default="http://0.0.0.0:8000",
                         help='limit for reading from database')
-    parser.add_option('--server', '-s', dest='server_url', default="http://0.0.0.0:8000",
-                        help='limit for reading from database')
-    options, _ = parser.parse_args()
-    return options.rep_path, options.add_path, options.edit_path, options.del_path, options.del_path_m, int(options.limit), options.server_url
+    args, _ = parser.parse_args()
+    return args.rep_path, args.add_path, args.edit_path, args.del_path, args.del_path_m, args.limit, args.server_url
 
 # ----------------------------------------
 #                 Main
 # ----------------------------------------
 def main():
     setup_logging()
-    rep_path, add_path, edit_path, del_path, del_path_m, limit, server_url = process_options()
+    rep_path, add_path, edit_path, del_path, del_path_m, limit, server_url = process_args()
 
     if rep_path:
         data = read_input_file(rep_path)
