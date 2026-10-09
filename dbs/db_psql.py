@@ -6,9 +6,8 @@ from datetime import datetime, timezone
 
 from . import sqlalchemy_util
 
-db = None
-
-is_event_handler = True
+is_full_event_handler = False
+is_summary_event_handler = True
 
 # --------------------------------------------------------------------------------
 #                                Required Functions
@@ -39,9 +38,10 @@ def setup():
 
     connection_string = f"postgresql+psycopg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
     sqlalchemy_util.setup_engine(connection_string)
+    sqlalchemy_util.setup()
 
 
-def add(collection: str, data: dict, row_id: str = None) -> tuple[int, str]:
+def add(collection: str, data: dict) -> tuple[int, str]:
     '''
     Adds one row of data to the database, optionally at some specific row id. For the "rules" collection, the datetime a rule is added is tracked.
 
@@ -54,7 +54,7 @@ def add(collection: str, data: dict, row_id: str = None) -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    sqlalchemy_util.add(collection, data, row_id)
+    return sqlalchemy_util.add(collection, data)
     # if table == 'rules':
     #     data['server_last_edit_date'] = datetime.now(timezone.utc)
     # if row_id:
@@ -84,7 +84,7 @@ def read(collection: str, limit: int, cursor: str = None) -> dict:
     Returns:
         dict: dict containing list of data (key="data") and optionally a cursor (key="cursor") if there is more data to read
     '''
-    sqlalchemy_util.read(collection, limit, cursor)
+    return sqlalchemy_util.read(collection, limit, cursor)
     # data, cursor = get_all_docs(collection, limit, cursor)
     # if data:
     #     if collection == 'rules':
@@ -110,7 +110,7 @@ def read_new_rules(date: datetime, limit: int, cursor: str = None) -> dict:
     Returns:
         dict: dict containing list of rules (key="rules") and optionally a cursor (key="cursor") if there is more data to read
     '''
-    sqlalchemy_util.read(date, limit, cursor)
+    return sqlalchemy_util.read_new_rules(date, limit, cursor)
     # data, cursor = get_all_docs_by_filter('rules', [('server_last_edit_date', '>', date)], limit=limit, cursor=cursor)
     # if data:
     #     # this data has server added fields that need to be removed
@@ -138,7 +138,7 @@ def delete(collection: str, data: dict, multiple: bool = False) -> tuple[int, st
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    sqlalchemy_util.read(collection, data, multiple)
+    return sqlalchemy_util.delete(collection, data, multiple)
     # if collection == 'rules':
     #     db.collection('machine_status').document('last_rule_delete').set({'date': datetime.now(timezone.utc)})
     # docs = list(get_doc_by_match(collection, data))
@@ -157,7 +157,7 @@ def delete(collection: str, data: dict, multiple: bool = False) -> tuple[int, st
 
 def get_last_rule_delete() -> datetime:
     # Gets the datetime the last delete action is stored, returns None if no deletion has ever occured
-    sqlalchemy_util.get_last_rule_delete()
+    return sqlalchemy_util.get_last_rule_delete()
     # doc = get_doc_by_id('machine_status', 'last_rule_delete')
     # if doc.exists:
     #     return doc.to_dict()['date']
@@ -177,7 +177,7 @@ def lookup_by_id(collection: str, row_id: str) -> dict:
         dict: dict containing data at the given row id
               returns None if no such row is found
     '''
-    sqlalchemy_util.lookup_by_id(collection, row_id)
+    return sqlalchemy_util.lookup_by_id(collection, row_id)
 
     # result = get_doc_by_id(collection, row_id)
     # if not result.exists:
@@ -196,13 +196,25 @@ def lookup(collection: str, data: dict) -> list:
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data
     '''
-    sqlalchemy_util.lookup(collection, data)
+    return sqlalchemy_util.lookup(collection, data)
     # result = list(get_doc_by_match(collection, data))
     # result = [doc.to_dict() for doc in result]
     # return result
 
+def lookup_hostconfig_by_target(target: str) -> list:
+    '''
+    Returns all hostconfigs in the collection that apply to a given target
 
-def edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
+    Parameters:
+        targer: the target of the hostconfig
+
+    Returns:
+        list: list of dicts, where every dict reflects one row in the database matching the given data
+    '''
+    return sqlalchemy_util.lookup_hostconfig_by_target(target)
+
+
+def edit_row(collection: str, data: dict) -> tuple[int, str]:
     '''
     Edits specified row to match data. For the "rules" collection the datetime a rule is added / edited is tracked.
 
@@ -215,7 +227,30 @@ def edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    sqlalchemy_util.edit(collection, data, row_id)
+    return sqlalchemy_util.edit_row(collection, data)
+    # doc = get_doc_by_id(collection, row_id)
+    # if doc.exists:
+    #     if collection == 'rules':
+    #         data['server_last_edit_date'] = datetime.now(timezone.utc)
+    #     db.collection(collection).document(row_id).set(data)
+    #     return 200, f'Entry {row_id} edited in {collection}'
+    # else:
+    #     return 404, f"Data {row_id} not found in {collection}, so cannot be edited"
+
+def edit_fields(collection: str, data: dict) -> tuple[int, str]:
+    '''
+    Edits specified row to match data. For the "rules" collection the datetime a rule is added / edited is tracked.
+
+    Parameters:
+        collection: name of the collection to edit
+        data: new data for that row in the collection
+        row_id: id of row ro edit
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    return sqlalchemy_util.edit_fields(collection, data)
     # doc = get_doc_by_id(collection, row_id)
     # if doc.exists:
     #     if collection == 'rules':
@@ -226,7 +261,7 @@ def edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
     #     return 404, f"Data {row_id} not found in {collection}, so cannot be edited"
 
 
-def add_or_edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
+def add_or_edit(collection: str, data: dict) -> tuple[int, str]:
     '''
     Edits one row of data to the database, or edits it if the row id already exists. For the "rules" collection the datetime a rule is added / edited is tracked.
 
@@ -239,7 +274,7 @@ def add_or_edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    sqlalchemy_util.add_or_edit(collection, data, row_id)
+    return sqlalchemy_util.add_or_edit(collection, data)
     # if collection == 'rules':
     #     data['server_last_edit_date'] = datetime.now(timezone.utc)
     # db.collection(collection).document(row_id).set(data)

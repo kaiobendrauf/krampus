@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from enum import Enum
 # from pydantic import BaseModel
@@ -84,7 +84,7 @@ class Certificate():
     def __post_init__(self):
         if ((not all(isinstance(i, str) for i in [self.sha256, self.cn, self.org, self.ou])) or 
             (not all(isinstance(i, int) for i in [self.valid_from, self.valid_until]))):
-            raise Excaption("Could not init Certificate, wrong data type given.")
+            raise Exception("Could not init Certificate, wrong data type given.")
 
 
 @dataclass
@@ -94,7 +94,7 @@ class Entitlement ():
 
     def __post_init__(self):
         if (not all(isinstance(i, (str, type(None))) for i in [self.key, self.value])):
-            raise Excaption("Could not init Entitlement, wrong data type given.")
+            raise Exception("Could not init Entitlement, wrong data type given.")
 
 @dataclass
 class EntitlementInfo():
@@ -104,7 +104,7 @@ class EntitlementInfo():
     def __post_init__(self):
         self.entitlements = [Entitlement(**ent) for ent in self.entitlements]
         if not isinstance(self.entitlements_filtered, bool):
-            raise Excaption("Could not init EntitlementInfo, wrong data type given.")
+            raise Exception("Could not init EntitlementInfo, wrong data type given.")
 
 
 @dataclass
@@ -148,9 +148,9 @@ class Event():
 
         if ((not all(isinstance(i, str) for i in [self.sha256, self.file_path, self.file_name, self.executing_user, self.file_bundle_id, self.file_bundle_path, self.file_bundle_executable_rel_path, self.file_bundle_name, self.file_bundle_version, self.file_bundle_version_string, self.file_bundle_hash, self.parent_name, self.team_id, self.signing_id, self.cdhash])) or 
             (not all(isinstance(i, int) for i in [self.file_bundle_hash_millis, self.file_bundle_binary_count, self.pid, self.ppid, self.cs_flags, self.secure_signing_time, self.signing_time])) or
-            (not all(isinstance(i, list[str]) for i in [self.logged_in_users, self.current_sessions])) or
+            (not all(isinstance(i, list) for i in [self.logged_in_users, self.current_sessions])) or
             (not isinstance(self.execution_time, float))):
-                raise Excaption("Could not init Event, wrong data type given.")
+                raise Exception("Could not init Event, wrong data type given.")
 
 @dataclass
 class ExportConfiguration():
@@ -159,15 +159,15 @@ class ExportConfiguration():
 
 @dataclass
 class HostConfig():
-    client_mode: ClientModes
-    batch_size: int
-    full_sync_interval_seconds: int
-    push_notification_full_sync_interval_seconds: int
-    push_notification_global_rule_sync_deadline_seconds: int
-    block_usb_mount: bool
-    remount_usb_mode: list[str]
-    push_token: str
-    push_issuer_token: str
+    client_mode: ClientMode = None
+    batch_size: int = None
+    full_sync_interval: int = None
+    push_notification_full_sync_interval: int = None
+    push_notification_global_rule_sync_deadline: int = None
+    block_usb_mount: bool = None
+    remount_usb_mode: list[str] = None
+    push_token: str = None
+    push_issuer_token: str = None
     sync_type: SyncType = None
     enable_bundles: bool = None
     enable_transitive_rules: bool = None
@@ -193,11 +193,11 @@ class HostConfig():
 
         if ((not all(isinstance(i, str) for i in [self.push_token, self.push_issuer_token])) or
             (not all(isinstance(i, (str, type(None))) for i in [self.allowed_path_regex, self.blocked_path_regex, self.event_detail_url, self.event_detail_text])) or
-            (not isinstance(self.remount_usb_mode, list[str]))
+            (not isinstance(self.remount_usb_mode, list))
             (not all(isinstance(i, int) for i in [self.batch_size, self.full_sync_interval_seconds, self.push_notification_full_sync_interval_seconds, self.push_notification_global_rule_sync_deadline_seconds])) or
             (not all(isinstance(i, bool) for i in [self.block_usb_mount])) or
             (not all(isinstance(i, (bool, type(None))) for i in [self.enable_bundles, self.enable_transitive_rules, self.enable_all_event_upload, self.disable_unknown_event_upload]))):
-                raise Excaption("Could not init Event, wrong data type given.")
+                raise Exception("Could not init Event, wrong data type given.")
 
 
 @dataclass
@@ -216,7 +216,12 @@ class Rule():
 
         if ((not all(isinstance(i, str) for i in [self.identifier, self.custom_msg, self.custom_url, self.notification_app_name, self.cel_expr])) or
             (not all(isinstance(i, (str, type(None))) for i in [self.custom_msg, self.custom_url, self.notification_app_name, self.cel_expr]))):
-            raise Excaption("Could not init Rule, wrong data type given.")
+            raise Exception("Could not init Rule, wrong data type given.")
+
+        if self.policy == Policy.CEL:
+            if cel_expr == None:
+                raise Exception("Missing 1 required positional arguments, CEL policy requires fiels cel_expr.")
+
 
 
 @dataclass
@@ -227,12 +232,12 @@ class SignedPost():
     def __post_init__(self):
         if ((not all(isinstance(i, str) for i in [self.url])) or
             (not all(isinstance(i, dict[str, str]) for i in [self.form_values]))):
-            raise Excaption("Could not init SignedPost, wrong data type given.")
+            raise Exception("Could not init SignedPost, wrong data type given.")
 
 
 # ----------------------------------------
-# #       Krampus Database Classes
-# # ----------------------------------------
+#       Krampus Classes
+# ----------------------------------------
 @dataclass
 class EventSummary():
     file_name: str
@@ -256,33 +261,93 @@ class EventSummary():
     def __post_init__(self):
         if ((not all(isinstance(i, str) for i in [self.file_name])) or
             (not all(isinstance(i, (int, type(None))) for i in [self.DECISION_UNKNOWN, self.ALLOW_UNKNOWN, self.ALLOW_BINARY, self.ALLOW_CERTIFICATE, self.ALLOW_SCOPE, self.ALLOW_TEAMID, self.ALLOW_SIGNINGID, self.ALLOW_CDHASH, self.BLOCK_UNKNOWN, self.BLOCK_BINARY, self.BLOCK_CERTIFICATE, self.BLOCK_SCOPE, self.BLOCK_TEAMID, self.BLOCK_SIGNINGID, self.BLOCK_CDHASH, self.BUNDLE_BINARY]))):
-            raise Excaption("Could not init EventSummary, wrong data type given.")
+            raise Exception("Could not init EventSummary, wrong data type given.")
 
 
 @dataclass
 class MachineStatus():
-    clean_sync_by: datetime.Datetime
+    clean_sync_by: datetime
     n_rules_sent: int
     sync_type: SyncType
-    last_check_in: datetime.Datetime = None
-    last_clean_sync: datetime.Datetime = None
+    last_check_in: datetime = None
+    last_clean_sync: datetime = None
 
     def __post_init__(self):
         self.sync_type = SyncType(self.SyncType)
 
-        if ((not all(isinstance(i, datetime.Datetime) for i in [self.clean_sync_by])) or
-            (not all(isinstance(i, (datetime.Datetime, type(None))) for i in [self.last_check_in, self.last_clean_sync])) or
+        if ((not all(isinstance(i, datetime) for i in [self.clean_sync_by])) or
+            (not all(isinstance(i, (datetime, type(None))) for i in [self.last_check_in, self.last_clean_sync])) or
             (not all(isinstance(i, int) for i in [self.n_rules_sent]))):
-            raise Excaption("Could not init MachineStatus, wrong data type given.")
+            raise Exception("Could not init MachineStatus, wrong data type given.")
 
 @dataclass
 class KrampusRule(Rule):
-    pass
+    server_last_edit_date: datetime = datetime.now(timezone.utc)
+    targets: list[str] = None
+    exclusions: list[str] = None
+    row_id: int = None
+
+    def __post_init__(self):
+        if ((not all(isinstance(i, (datetime, type(None))) for i in [self.server_last_edit_date])) or
+            (not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions])) or
+            (not all(isinstance(i, (int, type(None))) for i in [self.row_id]))):
+            raise Exception("Could not init KrampusRule, wrong data type given.")
+
+        if not self.targets:
+            self.targets = ["all"]
+
 
 @dataclass
 class KrampusHostConfig(HostConfig):
-    target: str = "all"
+    targets: list[str] = None
+    exclusions: list[str] = None
+    row_id: int = None
 
     def __post_init__(self):
-        if (not all(isinstance(i, str) for i in [self.target])):
-            raise Excaption("Could not init KrampusHostConfig, wrong data type given.")
+        if (not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions])):
+            raise Exception("Could not init KrampusHostConfig, wrong data type given.")
+
+        if not self.targets:
+            self.targets = ["all"]
+
+
+
+# ----------------------------------------
+#       Database Classes
+# ----------------------------------------  
+
+class DbRule():
+    data: dict
+
+    def __init__(self, data):
+        self.data = data 
+
+    def add(row_id: str=None) -> tuple[int, str]:
+        '''
+        Adds one row of data to the rules database, optionally at some specific row id.
+
+        Parameters:
+            collection: name of the collection to add data to
+            data: data for that row in the collection
+            row_id: desired id for new row in the collection
+
+        Returns:
+            int: http status code reflecting the success of the attempted action
+            str: description of action taken
+        '''
+    pass
+    
+
+class DbHostConfig():
+    data: dict
+
+    def __init__(self, data):
+        self.data = data 
+
+
+class DbEventSummary():
+    data: dict
+
+    def __init__(self, data):
+        self.data = data 
+

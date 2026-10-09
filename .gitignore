@@ -8,3 +8,5 @@ ctl-batch-ex.py
 docker-compose.yml
 docker-compose.yml
 pg.yml
+docker-compose.yml
+ms.yml

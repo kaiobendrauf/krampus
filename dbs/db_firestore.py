@@ -6,8 +6,24 @@ import uuid
 from datetime import datetime, timezone
 from google.cloud import firestore
 
-is_full_event_handler = True
+from ..santa_classes import KrampusRule KrampusHostConfig DbRule DbHostconfig DbEventSummary
+
+is_full_event_handler = False
 is_summary_event_handler = True
+
+# --------------------------------------------------------------------------------
+#                                Required Classes
+# --------------------------------------------------------------------------------
+class Rule():
+    data: dict
+
+    def __init__(self, data):
+        self.data = data 
+
+    def 
+
+
+
 
 # --------------------------------------------------------------------------------
 #                                Required Functions
@@ -117,7 +133,7 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
         str: description of action taken
     '''
     if collection == 'rules':
-        db.collection('machine_status').document('last_rule_delete').set({'date': datetime.now(timezone.utc)})
+        db.collection('krampusinfo').document('last_rule_delete').set({'date': datetime.now(timezone.utc)})
     docs = list(get_doc_by_match(collection, data))
     if len(docs) == 0:
         return 404, f'Data was not found in {collection} so could not be deleted.'
@@ -133,7 +149,7 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
 
 def get_last_rule_delete() -> datetime:
     # Gets the datetime the last delete action is stored, returns None if no deletion has ever occured 
-    doc = get_doc_by_id('machine_status', 'last_rule_delete')
+    doc = get_doc_by_id('krampusinfo', 'last_rule_delete')
     if doc.exists:
         return doc.to_dict()['date']
     else:

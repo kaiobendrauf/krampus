@@ -12,7 +12,7 @@ import zlib
 import flask
 from waitress import serve
 
-from santa_classes import Event, Rule
+from santa_classes import KrampusHostConfig, KrampusRule
 
 
 # Set up request listener
@@ -70,54 +70,57 @@ def setup_db():
         sys.exit(1)
     db.setup()
 
-def add_to_db(collection, data):
-    if collection == 'hostconfigs':
-        if 'target' in data:
-            target = data['target']
-        else:
-            target = 'all'
-        if db.lookup_by_id(collection, target):
-            return 409, f'Hostconfig with target {target} already exists.'
-        else:
-            return db.add(collection, data, target)
-    if collection == 'rules':
-        if 'identifier' in data:
-            target = data['identifier']
-        else:
-            return 400, f'Rule provided has no identifier.\n{data}'
-        if db.lookup_by_id(collection, target):
-            return 409, f'Hostconfig with target {target} already exists.'
-        else:
-            return db.add(collection, data, target)
-    return db.add(collection, data)
+# def add_to_db(collection, data):
+    #     try:
+    #         # hostconfig = KrampusHostConfig(**data)
+    #         if db.lookup_by_id(collection, hostconfig.target):
+    #             return 409, f'Hostconfig with target {hostconfig.target} already exists.'
+    #         else:
+    #             return db.add(collection, hostconfig, hostconfig.target)   
+    #     except Exception as e:
+    #         logging.warning(f'Invalid hostconfig provided so could not be added to the database.\n{data}')
+    #         logging.warning(e, exc_info=True)
+    #         return 400, f'Invalid hostconfig provided.\n{e}\n{data}'
+    # if collection == 'rules':
+    #     try:
+    #         # rule = KrampusRule(**data)
+    #         if db.lookup_by_id(collection, rule.identifier):
+    #             return 409, f'Hostconfig with target {target} already exists.'
+    #         else:
+    #             return db.add(collection, rule, rule.identifier)   
+    #     except Exception as e:
+    #         logging.warning(f'Invalid rule provided so could not be added to the database\n{data}')
+    #         logging.warning(e, exc_info=True)
+    #         return 400, f'Invalid rule provided so could not be added to the database\n{e}\n{data}'
+    # return db.add(collection, data)
 
-def add_edit_db(collection, data):
-    if collection == 'hostconfigs':
-        if 'target' in data:
-            target = data['target']
-        else:
-            target = 'all'
-        return db.add_or_edit(collection, data, target)
-    if collection == 'rules':
-        if 'identifier' in data:
-            return db.add_or_edit(collection, data, data['identifier'])
-        else:
-            return 400, f'Rule provided has no identifier.\n{data}'
-    return 400, f'Unkown collection {collection}, thus unkown identifier for data.\n{data}'
+# def add_edit_db(collection, data):
+    # if collection == 'hostconfigs':
+    #     if 'target' in data:
+    #         target = data['target']
+    #     else:
+    #         target = 'all'
+    #     return db.add_or_edit(collection, data, target)
+    # if collection == 'rules':
+    #     if 'identifier' in data:
+    #         return db.add_or_edit(collection, data, data['identifier'])
+    #     else:
+    #         return 400, f'Rule provided has no identifier.\n{data}'
+    # return 400, f'Unkown collection {collection}, thus unkown identifier for data.\n{data}'
 
-def edit_db(collection, data):
-    if collection == 'hostconfigs':
-        if 'target' in data:
-            target = data['target']
-        else:
-            target = 'all'
-        return db.edit(collection, data, target)
-    if collection == 'rules':
-        if 'identifier' in data:
-            return db.edit(collection, data, data['identifier'])
-        else:
-            return 400, f'Rule provided has no identifier.\n{data}'
-    return 400, f'Unkown collection {collection}, thus unkown identifier for data.\n{data}'
+# def edit_db(collection, data):
+#     if collection == 'hostconfigs':
+#         if 'target' in data:
+#             target = data['target']
+#         else:
+#             target = 'all'
+#         return db.edit(collection, data, target)
+#     if collection == 'rules':
+#         if 'identifier' in data:
+#             return db.edit(collection, data, data['identifier'])
+#         else:
+#             return 400, f'Rule provided has no identifier.\n{data}'
+#     return 400, f'Unkown collection {collection}, thus unkown identifier for data.\n{data}'
 
 # ----------------------------------------
 #            Event Handler
@@ -196,7 +199,7 @@ def ruledownload(machine_id):
     logging.debug(f'ruledownload for {machine_id}')
     if auth_sync.auth_sync(flask.request, machine_id):
         data = get_request_data(flask.request)
-        machine_status = db.lookup_by_id('machinestatus', machine_id)
+        machine_status = get_machine_status(machine_id)
         if machine_status:
             result = process_ruledownload(machine_id, machine_status, data)
             # logging.debug(f'ruledownload result:\n{result}')
@@ -213,7 +216,7 @@ def postflight(machine_id):
     logging.debug(f'postflight for {machine_id}')
     if auth_sync.auth_sync(flask.request, machine_id):
         data = get_request_data(flask.request)
-        machine_status = db.lookup_by_id('machinestatus', machine_id)
+        machine_status = get_machine_status(machine_id)
         if machine_status:
             process_postflight(machine_id, machine_status, data)
             return flask.Response(status=200)
@@ -234,7 +237,7 @@ def db_add(collection):
     if auth_ctl.auth_ctl(flask.request):
         if flask.request.content_type == 'application/json':
             data = flask.request.get_json()
-            status_code, text = add_to_db(collection, data)
+            status_code, text = db.add(collection, data)
             return flask.Response(text, status=status_code)
         else:
             flask.abort(415)
@@ -284,13 +287,27 @@ def db_del_multiple(collection):
         logging.warning(f'Attempted db-del-multiple request failed because authentication failed.')
         flask.abort(403)
 
-@server.route('/db-edit/<collection>', methods=['POST'])
-def db_edit(collection):
+@server.route('/db-edit-row/<collection>', methods=['POST'])
+def db_edit_row(collection):
     logging.debug(f'edit request for {collection}')
     if auth_ctl.auth_ctl(flask.request):
         if flask.request.content_type == 'application/json':
             data = flask.request.get_json()
-            status_code, text = edit_db(collection, data)
+            status_code, text = db.edit_row(collection, data)
+            return flask.Response(text, status=status_code)
+        else:
+            flask.abort(415)
+    else:
+        logging.warning(f'Attempted db-edit request failed because authentication failed.')
+        flask.abort(403)
+
+@server.route('/db-edit-fields/<collection>', methods=['POST'])
+def db_edit_fields(collection):
+    logging.debug(f'edit request for {collection}')
+    if auth_ctl.auth_ctl(flask.request):
+        if flask.request.content_type == 'application/json':
+            data = flask.request.get_json()
+            status_code, text = db.edit_fields(collection, data)
             return flask.Response(text, status=status_code)
         else:
             flask.abort(415)
@@ -317,6 +334,22 @@ def db_read(collection):
     else:
         logging.warning(f'Attempted db-read request failed because authentication failed.')
         flask.abort(403)
+
+
+# @server.route('/db-get/<collection>/<i>', methods=['POST'])
+# def db_read(collection):
+#     logging.debug(f'get request for row {i} in {collection}')
+#     if auth_ctl.auth_ctl(flask.request):
+#         data = db.lookup_by_id(collection, i)
+#         if data:
+#             return data
+#         else:
+#             flask.abort(404)
+#     else:
+#         logging.warning(f'Attempted db-read request failed because authentication failed.')
+#         flask.abort(403)
+
+
 
 # ----------------------------------------
 #           SANTA Request Logic
@@ -345,52 +378,89 @@ def decompress_data(data):
 def process_preflight(machine_id, data):
     hostconfig = get_hostconfig(machine_id, data)
     # machine_status = data to be stored for other requests
-    machine_status = db.lookup_by_id('machinestatus', machine_id)
+    machine_status = get_machine_status(machine_id)
     new = False
     if not machine_status:
-        machine_status = dict()
-        choose_sync_type(data, machine_status, hostconfig, True)
+        machine_status = {'machine_id': machine_id}
         new = True
-    else:
-        choose_sync_type(data, machine_status, hostconfig)
+    choose_sync_type(data, machine_status, hostconfig, new)
     # machine_status['stage'] = 'preflight'
+    if 'primary_user_groups' in data:
+        machine_status['primary_user_groups'] = data['primary_user_groups']
+    else:
+        machine_status.pop('primary_user_groups', None)
     machine_status['n_rules_sent'] = 0
     if new:
-        db.add('machinestatus', machine_status, machine_id)
+        db.add('machinestatus', machine_status)
     else:
-        db.edit('machinestatus', machine_status, machine_id)
+        db.edit_row('machinestatus', machine_status)
     return hostconfig
 
+def get_machine_status(machine_id):
+    results = db.lookup('machinestatus', {'machine_id': machine_id})
+    if len(results) == 0:
+        return None
+    elif len(results) == 1:
+        return results[0]
+    else:
+        logging.warning(f'{len(results)} machine status entries for machine {machine_id}. Keeping {results[0]['row_id']}')
+        for result in results[1:]:
+            db.delete('machinestatus', result)
+        return resuls[0]
+
 def get_hostconfig(machine_id, data):
-    result = dict()
-    groups = []
+    # lookup hostconfigs for machine
+    result = hostconfig_check_target(machine_id, machine_id, data, 'machine_id')
+    if result:
+        return result
+    # for groups
     if 'primary_user_groups' in data:
-        groups = data['primary_user_groups']
-    l = db.read('hostconfigs', 2)
-    if l:
-        if len(l['data']) == 1:
-            result = l['data'][0]
-        elif len(l['data']) == 2:
-            # more than one result so need to find the right one
-            # is there a specific config just for that machine?
-            machine_config = db.lookup_by_id('hostconfigs', machine_id)
-            if machine_config:
-                result = machine_config
-            else:
-                # no specific config for that machine -> look at group
-                group_configs = []
-                for group in groups:
-                    group_config = db.lookup_by_id('hostconfigs', group)
-                    if group_config:
-                        group_configs += [group_config]
-                if len(group_configs) == 1:
-                    result = group_configs[0]
-                else:
-                    # no individual or group config -> look for global config
-                    result = db.lookup_by_id('hostconfigs', 'all')
-    if 'target' in result:
-        result.pop('target')
-    return result
+        result = hostconfig_check_target(data['primary_user_groups'], machine_id, data, 'primary_user_groups')
+        if result:
+            return result
+    #look up all hostconfigs for all
+    result = hostconfig_check_target('all', machine_id, data, 'all machines')
+    if result:
+        return result
+    return dict()
+
+def hostconfig_remove_krampus_data_hostconfig(hostconfig):
+    hostconfig.pop('row_id', None)
+    hostconfig.pop('targets', None)
+    hostconfig.pop('exemptions', None)
+    return hostconfig
+
+def hostconfig_check_target(target, machine_id, machine_data, s):
+    results = []
+    result_ids = set()
+    if isinstance(target, list):
+        for el in target:
+            hostconfigs = db.lookup_hostconfig_by_target(el)
+            for hostconfig in hostconfigs:
+                if not is_target_exempt(hostconfig, machine_id, machine_data):
+                    results.append(hostconfig)
+                    result_ids.add(hostconfig['row_id'])
+    else:
+        hostconfigs = db.lookup_hostconfig_by_target(machine_id)
+        for hostconfig in hostconfigs:
+            if not is_target_exempt(hostconfig, machine_id, machine_data):
+                results.append(hostconfig)
+                result_ids.add(hostconfig['row_id'])
+    if len(result_ids) == 1:
+        return hostconfig_remove_krampus_data_hostconfig(results[0])
+    if len(result_ids) > 1:
+        logging.warning(f'Conflicting hostconfigs found for {machine_id}, when looking at hostconfigs that target {s}. Hostconfigs with the following ids apply:\n{result_ids}')
+        return hostconfig_remove_krampus_data_hostconfig(results[0])
+
+def is_target_exempt(db_data, machine_id, machine_data):
+    if 'exemptions' in db_data:
+        if machine_id in db_data['exemptions']:
+            return True 
+        if 'primary_user_groups' in machine_data:
+            for group in machine_data['primary_user_groups']:
+                if group in db_data['exemptions']:
+                    return True
+    return False
 
 def choose_sync_type(request, machine_status, hostconfig, new=False):
     if new or request.get('request_clean_sync') or (datetime.now(timezone.utc) > machine_status['clean_sync_by']) or (not has_clean_sync_since_delete(machine_status)):
@@ -446,13 +516,29 @@ def process_ruledownload(machine_id, machine_status, data):
     if machine_status['sync_type'] == 'CLEAN' or machine_status['sync_type'] == 'CLEAN_ALL' or ('last_check_in' not in machine_status):
         logging.debug(f'Performing Clean sync for {machine_id}')
         result = db.read('rules', batch_size, cursor)
-        result['rules'] = result['data']
+        rules = []
+        for rule in result['data']:
+            targets = rule.pop('targets', None)
+            exclusions = rule.pop('exclusions', None)
+            if check_if_targets_machine(targets, machine_id, machine_status) and (not check_if_targets_machine(exclusions, machine_id, machine_status)):
+                rule.pop('row_id', None)
+                rules.append(rule)
+        result['rules'] = rules
         del result['data']
     else:
         result = db.read_new_rules(machine_status['last_check_in'], batch_size, cursor) 
     machine_status['n_rules_sent'] += len(result['rules'])
-    db.edit('machinestatus', machine_status, machine_id)
+    db.edit_row('machinestatus', machine_status)
     return result
+
+def check_if_targets_machine(targets, machine_id, machine_status):
+    if targets:
+        if 'all' in targets or machine_id in targets:
+            return True
+        if 'primary_user_groups' in machine_status:
+            for group in machine_status['primary_user_groups']:
+                if group in targets:
+                    return True
 
 # postflight
 # ----------
@@ -479,7 +565,7 @@ def process_postflight(machine_id, machine_status, data):
         machine_status['last_check_in'] = datetime.now(timezone.utc)
         process_postflight_sync_type(machine_id, machine_status, data)
     machine_status['n_rules_sent'] = 0
-    db.edit('machinestatus', machine_status, machine_id)
+    db.edit_fields('machinestatus', machine_status)
 
 def process_postflight_sync_type(machine_id, machine_status, data):
     if 'syncType' in data and (data['syncType'] == 'CLEAN' or data['syncType'] == 'CLEAN_ALL'):

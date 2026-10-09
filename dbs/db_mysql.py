@@ -114,7 +114,7 @@ def read_new_rules(date: datetime, limit: int, cursor: str = None) -> dict:
     Returns:
         dict: dict containing list of rules (key="rules") and optionally a cursor (key="cursor") if there is more data to read
     '''
-    sqlalchemy_util.read(date, limit, cursor)
+    sqlalchemy_util.read_new_rules(date, limit, cursor)
     # data, cursor = get_all_docs_by_filter('rules', [('server_last_edit_date', '>', date)], limit=limit, cursor=cursor)
     # if data:
     #     # this data has server added fields that need to be removed
@@ -142,7 +142,7 @@ def delete(collection: str, data: dict, multiple: bool = False) -> tuple[int, st
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    sqlalchemy_util.read(collection, data, multiple)
+    sqlalchemy_util.delete(collection, data, multiple)
     # if collection == 'rules':
     #     db.collection('machine_status').document('last_rule_delete').set({'date': datetime.now(timezone.utc)})
     # docs = list(get_doc_by_match(collection, data))
