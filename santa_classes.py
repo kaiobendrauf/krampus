@@ -153,6 +153,16 @@ class Event():
                 raise Exception("Could not init Event, wrong data type given.")
 
 @dataclass
+class SignedPost():
+    url: str
+    form_values: dict[str, str]
+
+    def __post_init__(self):
+        if ((not all(isinstance(i, str) for i in [self.url])) or
+            (not all(isinstance(i, dict[str, str]) for i in [self.form_values]))):
+            raise Exception("Could not init SignedPost, wrong data type given.")
+
+@dataclass
 class ExportConfiguration():
     signed_post: SignedPost
 
@@ -221,19 +231,6 @@ class Rule():
         if self.policy == Policy.CEL:
             if cel_expr == None:
                 raise Exception("Missing 1 required positional arguments, CEL policy requires fiels cel_expr.")
-
-
-
-@dataclass
-class SignedPost():
-    url: str
-    form_values: dict[str, str]
-
-    def __post_init__(self):
-        if ((not all(isinstance(i, str) for i in [self.url])) or
-            (not all(isinstance(i, dict[str, str]) for i in [self.form_values]))):
-            raise Exception("Could not init SignedPost, wrong data type given.")
-
 
 # ----------------------------------------
 #       Krampus Classes

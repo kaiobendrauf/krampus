@@ -278,7 +278,7 @@ def lookup(collection: str, data: dict) -> list:
     groups = data.pop('primary_user_groups', None)
 
     with db.connect() as conn:
-            rows = conn.execute(select(tbl).filter_by(**data))
+        rows = conn.execute(select(tbl).filter_by(**data))
     results = [dict(row._mapping) for row in rows]
 
     if collection in ['rules', 'hostconfigs', 'machinestatus']:
@@ -301,7 +301,7 @@ def lookup_hostconfig_by_target(target: str) -> list:
     row_ids = set()
     for row in rows:
         row_ids.add(row['linked_id'])
-    for row_id in list(row_ids):
+    for row_id in row_ids:
         results.append(lookup_by_id('hostconfigs', row_id))
     return results
 

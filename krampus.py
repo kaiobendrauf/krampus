@@ -441,7 +441,7 @@ def hostconfig_check_target(target, machine_id, machine_data, s):
                     results.append(hostconfig)
                     result_ids.add(hostconfig['row_id'])
     else:
-        hostconfigs = db.lookup_hostconfig_by_target(machine_id)
+        hostconfigs = db.lookup_hostconfig_by_target(target)
         for hostconfig in hostconfigs:
             if not is_target_exempt(hostconfig, machine_id, machine_data):
                 results.append(hostconfig)
