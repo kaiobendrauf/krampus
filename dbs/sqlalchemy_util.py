@@ -187,7 +187,7 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
             rows = conn.execute(select(tbl).where(tbl.c.server_last_edit_date > date).order_by(tbl.c.row_id).limit(limit+1))
     rows = [dict(row._mapping) for row in rows]
 
-    rows = [add_lists(row, collection) for row in rows]
+    rows = [add_lists(row, 'rules') for row in rows]
 
     # this data has server added fields that need to be removed
     [row.pop('server_last_edit_date') for row in rows]
