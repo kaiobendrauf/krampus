@@ -59,7 +59,7 @@ class KrampusInfo(Base):
     __tablename__ = 'krampusinfo'
 
     row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    last_rule_delete: Mapped[datetime] = mapped_column(DateTime())
+    last_rule_delete: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 class MachineStatus(Base):
     __tablename__ = 'machinestatus'
