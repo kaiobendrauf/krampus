@@ -497,7 +497,7 @@ def pick_future_clean_sync_by(machine_status):
         min_days = int(min_days)
     max_days = os.environ.get('MAX_CLEAN_SYNC_DAYS')
     if not max_days:
-        min_days = 13
+        max_days = 13
     else:
         max_days = int(max_days)
     machine_status['clean_sync_by'] = datetime.now(timezone.utc) + timedelta(days=random.randint(min_days, max_days))
