@@ -520,15 +520,15 @@ def process_ruledownload(machine_id, machine_status, data):
         result = db.read_new_rules(machine_status['last_check_in'], batch_size, cursor) 
 
     rules = []
-        for rule in result['data']:
-            targets = rule.pop('targets', None)
-            exclusions = rule.pop('exclusions', None)
-            if check_if_targets_machine(targets, machine_id, machine_status) and (not check_if_targets_machine(exclusions, machine_id, machine_status)):
-                rule.pop('row_id', None)
-                rules.append(rule)
-        result['rules'] = rules
-        del result['data']
-        
+    for rule in result['data']:
+        targets = rule.pop('targets', None)
+        exclusions = rule.pop('exclusions', None)
+        if check_if_targets_machine(targets, machine_id, machine_status) and (not check_if_targets_machine(exclusions, machine_id, machine_status)):
+            rule.pop('row_id', None)
+            rules.append(rule)
+    result['rules'] = rules
+    result.pop('data')
+
     machine_status['n_rules_sent'] += len(result['rules'])
     db.edit_row('machinestatus', machine_status)
     return result
