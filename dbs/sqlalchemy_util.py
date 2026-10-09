@@ -189,9 +189,8 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
 
     rows = [add_lists(row, collection) for row in rows]
 
-    if collection == 'rules':
-        # this data has server added fields that need to be removed
-        [row.pop('server_last_edit_date') for row in rows]
+    # this data has server added fields that need to be removed
+    [row.pop('server_last_edit_date') for row in rows]
     
     if len(rows) > limit:
         last = rows.pop()
