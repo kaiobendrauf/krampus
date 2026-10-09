@@ -28,7 +28,7 @@ class Rule(Base):
     notification_app_name: Mapped[str] = mapped_column(String(255))
     policy: Mapped[str] = mapped_column(String(255))
     rule_type: Mapped[str] = mapped_column(String(255))
-    server_last_edit_date: Mapped[datetime] = mapped_column(DateTime())
+    server_last_edit_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 class Targets(Base):
     __tablename__ = 'targets'
@@ -68,9 +68,9 @@ class MachineStatus(Base):
     machine_id: Mapped[str] = mapped_column(String(255), unique=True)
     n_rules_sent: Mapped[int] = mapped_column(Integer)
     sync_type: Mapped[str] = mapped_column(String(255))
-    last_check_in: Mapped[datetime] = mapped_column(DateTime(), nullable=True)
-    last_clean_sync: Mapped[datetime] = mapped_column(DateTime(), nullable=True)
-    clean_sync_by: Mapped[datetime] = mapped_column(DateTime(), nullable=True)
+    last_check_in: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_clean_sync: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    clean_sync_by: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class UserGroups(Base):
