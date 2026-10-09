@@ -516,7 +516,10 @@ def process_ruledownload(machine_id, machine_status, data):
     if machine_status['sync_type'] == 'CLEAN' or machine_status['sync_type'] == 'CLEAN_ALL' or ('last_check_in' not in machine_status):
         logging.debug(f'Performing Clean sync for {machine_id}')
         result = db.read('rules', batch_size, cursor)
-        rules = []
+    else:
+        result = db.read_new_rules(machine_status['last_check_in'], batch_size, cursor) 
+
+    rules = []
         for rule in result['data']:
             targets = rule.pop('targets', None)
             exclusions = rule.pop('exclusions', None)
@@ -525,8 +528,7 @@ def process_ruledownload(machine_id, machine_status, data):
                 rules.append(rule)
         result['rules'] = rules
         del result['data']
-    else:
-        result = db.read_new_rules(machine_status['last_check_in'], batch_size, cursor) 
+        
     machine_status['n_rules_sent'] += len(result['rules'])
     db.edit_row('machinestatus', machine_status)
     return result
