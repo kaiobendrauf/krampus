@@ -410,7 +410,7 @@ def get_machine_status(machine_id):
         logging.warning(f'{len(results)} machine status entries for machine {machine_id}. Keeping {results[0]['row_id']}')
         for result in results[1:]:
             db.delete('machinestatus', result)
-        return resuls[0]
+        return results[0]
 
 def get_hostconfig(machine_id, data):
     # lookup hostconfigs for machine_id

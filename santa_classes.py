@@ -146,7 +146,7 @@ class Event():
         self.entitlement_info = EntitlementInfo(**self.entitlement_info)
         self.signing_status = SigningStatus(**self.signing_status)
 
-        if ((not all(isinstance(i, str) for i in [self.sha256, self.file_path, self.file_name, self.executing_user, self.file_bundle_id, self.file_bundle_path, self.file_bundle_executable_rel_path, self.file_bundle_name, self.file_bundle_version, self.file_bundle_version_string, self.file_bundle_hash, self.parent_name, self.team_id, self.signing_id, self.cdhash])) or 
+        if ((not all(isinstance(i, str) for i in [self.file_sha256, self.file_path, self.file_name, self.executing_user, self.file_bundle_id, self.file_bundle_path, self.file_bundle_executable_rel_path, self.file_bundle_name, self.file_bundle_version, self.file_bundle_version_string, self.file_bundle_hash, self.parent_name, self.team_id, self.signing_id, self.cdhash])) or
             (not all(isinstance(i, int) for i in [self.file_bundle_hash_millis, self.file_bundle_binary_count, self.pid, self.ppid, self.cs_flags, self.secure_signing_time, self.signing_time])) or
             (not all(isinstance(i, list) for i in [self.logged_in_users, self.current_sessions])) or
             (not isinstance(self.execution_time, float))):
@@ -203,8 +203,8 @@ class HostConfig():
 
         if ((not all(isinstance(i, str) for i in [self.push_token, self.push_issuer_token])) or
             (not all(isinstance(i, (str, type(None))) for i in [self.allowed_path_regex, self.blocked_path_regex, self.event_detail_url, self.event_detail_text])) or
-            (not isinstance(self.remount_usb_mode, list))
-            (not all(isinstance(i, int) for i in [self.batch_size, self.full_sync_interval_seconds, self.push_notification_full_sync_interval_seconds, self.push_notification_global_rule_sync_deadline_seconds])) or
+            (not isinstance(self.remount_usb_mode, list)) or
+            (not all(isinstance(i, int) for i in [self.batch_size, self.full_sync_interval, self.push_notification_full_sync_interval, self.push_notification_global_rule_sync_deadline])) or
             (not all(isinstance(i, bool) for i in [self.block_usb_mount])) or
             (not all(isinstance(i, (bool, type(None))) for i in [self.enable_bundles, self.enable_transitive_rules, self.enable_all_event_upload, self.disable_unknown_event_upload]))):
                 raise Exception("Could not init Event, wrong data type given.")

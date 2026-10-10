@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from google.cloud import firestore
 
-from ..santa_classes import KrampusRule KrampusHostConfig DbRule DbHostconfig DbEventSummary
+from ..santa_classes import KrampusRul, KrampusHostConfig, DbRule, DbHostconfig, DbEventSummary
 
 is_full_event_handler = False
 is_summary_event_handler = True
@@ -18,12 +18,7 @@ class Rule():
     data: dict
 
     def __init__(self, data):
-        self.data = data 
-
-    def 
-
-
-
+        self.data = data
 
 # --------------------------------------------------------------------------------
 #                                Required Functions
