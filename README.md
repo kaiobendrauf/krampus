@@ -1,11 +1,4 @@
-# krampus
-A SANTA sync server working with a firestore database
+# Krampus
+Krampus is a Python [sync server](https://northpole.dev/features/sync/) for [Santa](https://github.com/northpolesec/santa/). Krampus is written with modularity in mind, meaning the server can work with different database backends. Currently implemented are integrations for a Postgres database, with mysql and firestorm currently in development.
 
-## Local Development
-Here's how you get set up with the local development environment:
-1. `docker compose up --build`
-2. That's it!
-
-### Accessing MySQL in the local environment
-1. Go to http://localhost:8094
-2. Use the credentials for `krampus_rw` from the Docker compose file to log in. This account has permissions in the `krampus` database.
+For more information please read through [the wiki](https://github.com/kaiobendrauf/krampus/wiki).
