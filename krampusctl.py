@@ -57,8 +57,6 @@ def replicate(data, server_url, limit):
         collection_data = process_replicate_chunk(req_result['data'], collection_data, collection, f'{server_url}/db-del/{collection}')
         # for collection add all missing data
         for d in collection_data:
-            print("adding to database")
-            print(d)
             server_req(f'{server_url}/db-add/{collection}', d)
 
 def process_rep_response(req_res):
@@ -73,7 +71,7 @@ def process_rep_response(req_res):
     sys.exit(1)
 
 def process_replicate_chunk(response_data, data, collection, del_url):
-    print(f'processing chunk. response data size {len(response_data)}, data size {len(data)}')
+    # print(f'processing chunk. response data size {len(response_data)}, data size {len(data)}')
     new_data = data.copy()
     for i, d in enumerate(data):
         match = check_dict_to_database(response_data, d)
@@ -87,14 +85,29 @@ def process_replicate_chunk(response_data, data, collection, del_url):
     return new_data
 
 def check_dict_to_database(database, d):
+    # print('\n\n----------------------')
+    # print('looking for match for')
+    # print(d)
+    # print('\n')
     for data in database:
+        # print(f'checking: {data}')
         match = True
         for key in d:
-            if not(key in data and data[key] == d[key]):
+            if match and not(key in data and data[key] == d[key]):
+                # if key in data:
+                #     print(f'not a match because {key} is {data[key]} instead of {d[key]}')
+                # else: 
+                #     print(f'not a match because {key} is missing')
                 match = False
-                break
+        for key in set(data.keys()).difference(set(d.keys())):
+            if match and key != 'row_id' and (not (data[key] == None)):
+                # print(f'not a match because new {key} is {data[key]} instead of not existing')
+                match = False
         if match:
+            # print('match!')
             return data
+    #     print('\n')
+    # print('no match found\n')
 
 def add(data, server_url):
     for collection in data:

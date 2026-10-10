@@ -21,11 +21,11 @@ class Rule(Base):
     __tablename__ = 'rules'
 
     row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    cel_expr: Mapped[str] = mapped_column(String(255))
-    custom_msg: Mapped[str] = mapped_column(String(255))
-    custom_url: Mapped[str] = mapped_column(String(255))
+    cel_expr: Mapped[str] = mapped_column(String(255), nullable=True)
+    custom_msg: Mapped[str] = mapped_column(String(255), nullable=True)
+    custom_url: Mapped[str] = mapped_column(String(255), nullable=True)
     identifier: Mapped[str] = mapped_column(String(255))
-    notification_app_name: Mapped[str] = mapped_column(String(255))
+    notification_app_name: Mapped[str] = mapped_column(String(255), nullable=True)
     policy: Mapped[str] = mapped_column(String(255))
     rule_type: Mapped[str] = mapped_column(String(255))
     server_last_edit_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -43,17 +43,17 @@ class HostClass(Base):
     __tablename__ = 'hostconfigs'
 
     row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    allowed_path_regex: Mapped[str] = mapped_column(String(255))
-    batch_size: Mapped[int] = mapped_column(Integer)
-    block_usb_mount: Mapped[bool] = mapped_column(Boolean)
-    disable_unknown_event_upload: Mapped[bool] = mapped_column(Boolean)
-    enable_all_event_upload: Mapped[bool] = mapped_column(Boolean)
-    enable_bundles: Mapped[bool] = mapped_column(Boolean)
-    enable_transitive_rules: Mapped[bool] = mapped_column(Boolean)
-    full_sync_interval: Mapped[int] = mapped_column(Integer)
-    override_file_access_action: Mapped[str] = mapped_column(String(255))
-    push_notification_full_sync_interval: Mapped[int] = mapped_column(Integer)
-    push_notification_global_rule_sync_deadline: Mapped[int] = mapped_column(Integer)
+    allowed_path_regex: Mapped[str] = mapped_column(String(255), nullable=True)
+    batch_size: Mapped[int] = mapped_column(Integer, nullable=True)
+    block_usb_mount: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    disable_unknown_event_upload: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    enable_all_event_upload: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    enable_bundles: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    enable_transitive_rules: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    full_sync_interval: Mapped[int] = mapped_column(Integer, nullable=True)
+    override_file_access_action: Mapped[str] = mapped_column(String(255), nullable=True)
+    push_notification_full_sync_interval: Mapped[int] = mapped_column(Integer, nullable=True)
+    push_notification_global_rule_sync_deadline: Mapped[int] = mapped_column(Integer, nullable=True)
 
 class KrampusInfo(Base):
     __tablename__ = 'krampusinfo'
