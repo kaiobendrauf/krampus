@@ -214,11 +214,6 @@ def delete(collection: str, data: dict, multiple: bool = False) -> tuple[int, st
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    if collection == 'rules':
-        with db.connect() as conn:
-            t = get_table('krampusinfo')
-            conn.execute(update(t).where(t.c.row_id == 1).values(last_rule_delete=datetime.now(timezone.utc)))
-            conn.commit()
     rows = lookup(collection, data)
     if len(rows) == 0:
         return 404, f'Data was not found in {collection} so could not be deleted.'
@@ -234,7 +229,7 @@ def delete(collection: str, data: dict, multiple: bool = False) -> tuple[int, st
 
 
 def get_last_rule_delete() -> datetime:
-    # Gets the datetime the last delete action is stored, returns None if no deletion has ever occured 
+    # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occured 
     row = lookup_by_id('krampusinfo', 1)
     if row:
         return row['last_rule_delete']
@@ -418,6 +413,7 @@ def delete_row_by_id(collection, i):
         delete('targets', {'table': collection, 'linked_id': i}, True)
     elif collection == 'machinestatus':
         delete('usergroups', {'linked_id': i}, True)
+    store_delete_time(collection)
 
     # for col in cols:
     #     if col.key in data:
@@ -498,3 +494,10 @@ def filter_matches_by_lists(collection, targets, groups, exclusions, results):
             if to_add:
                 results.append(result)
     return results
+
+def store_delete_time(collection):
+    if collection == 'rules':
+        with db.connect() as conn:
+            t = get_table('krampusinfo')
+            conn.execute(update(t).where(t.c.row_id == 1).values(last_rule_delete=datetime.now(timezone.utc)))
+            conn.commit()
