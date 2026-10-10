@@ -64,7 +64,7 @@ class SigningStatus(Enum):
     SIGNING_STATUS_PRODUCTION = 5
 
 class SyncType(Enum):
-    eSYNC_TYPE_UNSPECIFIED = 0
+    SYNC_TYPE_UNSPECIFIED = 0
     NORMAL = 1
     CLEAN = 2
     CLEAN_ALL = 3

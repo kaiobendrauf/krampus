@@ -66,6 +66,7 @@ class MachineStatus(Base):
 
     row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     machine_id: Mapped[str] = mapped_column(String(255), unique=True)
+    primary_user: Mapped[str] = mapped_column(String(255))
     n_rules_sent: Mapped[int] = mapped_column(Integer)
     sync_type: Mapped[str] = mapped_column(String(255))
     last_check_in: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)

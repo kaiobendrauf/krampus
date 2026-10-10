@@ -389,6 +389,10 @@ def process_preflight(machine_id, data):
         machine_status['primary_user_groups'] = data['primary_user_groups']
     else:
         machine_status.pop('primary_user_groups', None)
+    if 'primary_user' in data:
+        machine_status['primary_user'] = data['primary_user']
+    else:
+        machine_status.pop('primary_user', None)
     machine_status['n_rules_sent'] = 0
     if new:
         db.add('machinestatus', machine_status)
@@ -409,8 +413,13 @@ def get_machine_status(machine_id):
         return resuls[0]
 
 def get_hostconfig(machine_id, data):
-    # lookup hostconfigs for machine
+    # lookup hostconfigs for machine_id
     result = hostconfig_check_target(machine_id, machine_id, data, 'machine_id')
+    if result:
+        return result
+    # lookup hostconfig for user
+    if 'primary_user' in data:
+    result = hostconfig_check_target(data['primary_user'], machine_id, data, 'machine_id')
     if result:
         return result
     # for groups
@@ -456,6 +465,8 @@ def is_target_exempt(db_data, machine_id, machine_data):
     if 'exemptions' in db_data:
         if machine_id in db_data['exemptions']:
             return True 
+        if 'primary_user' in machine_data:
+            if machine_data['primary_user'] in db_data['exemptions']
         if 'primary_user_groups' in machine_data:
             for group in machine_data['primary_user_groups']:
                 if group in db_data['exemptions']:
@@ -464,18 +475,18 @@ def is_target_exempt(db_data, machine_id, machine_data):
 
 def choose_sync_type(request, machine_status, hostconfig, new=False):
     if new or request.get('request_clean_sync') or (datetime.now(timezone.utc) > machine_status['clean_sync_by']) or (not has_clean_sync_since_delete(machine_status)):
-        if hostconfig and type(hostconfig) == dict and 'sync_type' in hostconfig and hostconfig['sync_type'] == 'CLEAN_ALL':
-            machine_status['sync_type'] = 'CLEAN_ALL'
-            hostconfig['sync_type'] = 'CLEAN_ALL'
+        if hostconfig and type(hostconfig) == dict and 'sync_type' in hostconfig and hostconfig['sync_type'] == 'clean_all':
+            machine_status['sync_type'] = 'clean_all'
+            hostconfig['sync_type'] = 'clean_all'
         else:
-            machine_status['sync_type'] = 'CLEAN'
-            hostconfig['sync_type'] = 'CLEAN'
+            machine_status['sync_type'] = 'clean'
+            hostconfig['sync_type'] = 'clean'
         # clean sync will now be required until completed
         machine_status['clean_sync_by'] = datetime.now(timezone.utc)
     elif hostconfig and type(hostconfig) == dict and 'sync_type' in hostconfig:
         machine_status['sync_type'] = hostconfig['sync_type']
     else:
-        machine_status['sync_type'] = 'NORMAL'
+        machine_status['sync_type'] = 'normal'
 
 def has_clean_sync_since_delete(machine_status):
     last_rule_delete = db.get_last_rule_delete()
@@ -513,7 +524,7 @@ def process_ruledownload(machine_id, machine_status, data):
     cursor = None
     if 'cursor' in data:
         cursor = data['cursor']
-    if machine_status['sync_type'] == 'CLEAN' or machine_status['sync_type'] == 'CLEAN_ALL' or ('last_check_in' not in machine_status):
+    if machine_status['sync_type'] == 'clean' or machine_status['sync_type'] == 'clean_all' or ('last_check_in' not in machine_status):
         logging.debug(f'Performing Clean sync for {machine_id}')
         result = db.read('rules', batch_size, cursor)
     else:
@@ -537,6 +548,9 @@ def check_if_targets_machine(targets, machine_id, machine_status):
     if targets:
         if 'all' in targets or machine_id in targets:
             return True
+        if 'primary_user' in machine_status:
+            if machine_status['primary_user'] in targets:
+                return True
         if 'primary_user_groups' in machine_status:
             for group in machine_status['primary_user_groups']:
                 if group in targets:
