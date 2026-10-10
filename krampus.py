@@ -419,9 +419,9 @@ def get_hostconfig(machine_id, data):
         return result
     # lookup hostconfig for user
     if 'primary_user' in data:
-    result = hostconfig_check_target(data['primary_user'], machine_id, data, 'machine_id')
-    if result:
-        return result
+        result = hostconfig_check_target(data['primary_user'], machine_id, data, 'machine_id')
+        if result:
+            return result
     # for groups
     if 'primary_user_groups' in data:
         result = hostconfig_check_target(data['primary_user_groups'], machine_id, data, 'primary_user_groups')
@@ -466,7 +466,8 @@ def is_target_exempt(db_data, machine_id, machine_data):
         if machine_id in db_data['exemptions']:
             return True 
         if 'primary_user' in machine_data:
-            if machine_data['primary_user'] in db_data['exemptions']
+            if machine_data['primary_user'] in db_data['exemptions']:
+                return True
         if 'primary_user_groups' in machine_data:
             for group in machine_data['primary_user_groups']:
                 if group in db_data['exemptions']:
