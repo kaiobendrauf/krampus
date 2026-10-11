@@ -159,7 +159,7 @@ class SignedPost():
 
     def __post_init__(self):
         if ((not all(isinstance(i, str) for i in [self.url])) or
-            (not all(isinstance(i, dict[str, str]) for i in [self.form_values]))):
+            (not all(isinstance(i, dict) for i in [self.form_values]))):
             raise Exception("Could not init SignedPost, wrong data type given.")
 
 @dataclass
@@ -229,7 +229,7 @@ class Rule():
             raise Exception("Could not init Rule, wrong data type given.")
 
         if self.policy == Policy.CEL:
-            if cel_expr == None:
+            if self.cel_expr is None:
                 raise Exception("Missing 1 required positional arguments, CEL policy requires fiels cel_expr.")
 
 # ----------------------------------------
@@ -301,7 +301,7 @@ class KrampusHostConfig(HostConfig):
     row_id: int = None
 
     def __post_init__(self):
-        if (not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions])):
+        if not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions]):
             raise Exception("Could not init KrampusHostConfig, wrong data type given.")
 
         if not self.targets:
@@ -319,7 +319,7 @@ class DbRule():
     def __init__(self, data):
         self.data = data 
 
-    def add(row_id: str=None) -> tuple[int, str]:
+    def add(self, row_id: str=None) -> tuple[int, str]:
         '''
         Adds one row of data to the rules database, optionally at some specific row id.
 
