@@ -235,59 +235,58 @@ class Rule():
 # ----------------------------------------
 #       Krampus Classes
 # ----------------------------------------
-@dataclass
-class EventSummary():
-    file_name: str
-    DECISION_UNKNOWN: int = None
-    ALLOW_UNKNOWN: int = None
-    ALLOW_BINARY: int = None
-    ALLOW_CERTIFICATE: int = None
-    ALLOW_SCOPE: int = None
-    ALLOW_TEAMID: int = None
-    ALLOW_SIGNINGID: int = None
-    ALLOW_CDHASH: int = None
-    BLOCK_UNKNOWN: int = None
-    BLOCK_BINARY: int = None
-    BLOCK_CERTIFICATE: int = None
-    BLOCK_SCOPE: int = None
-    BLOCK_TEAMID: int = None
-    BLOCK_SIGNINGID: int = None
-    BLOCK_CDHASH: int = None
-    BUNDLE_BINARY: int = None
+# @dataclass
+# class EventSummary():
+#     file_name: str
+#     DECISION_UNKNOWN: int = None
+#     ALLOW_UNKNOWN: int = None
+#     ALLOW_BINARY: int = None
+#     ALLOW_CERTIFICATE: int = None
+#     ALLOW_SCOPE: int = None
+#     ALLOW_TEAMID: int = None
+#     ALLOW_SIGNINGID: int = None
+#     ALLOW_CDHASH: int = None
+#     BLOCK_UNKNOWN: int = None
+#     BLOCK_BINARY: int = None
+#     BLOCK_CERTIFICATE: int = None
+#     BLOCK_SCOPE: int = None
+#     BLOCK_TEAMID: int = None
+#     BLOCK_SIGNINGID: int = None
+#     BLOCK_CDHASH: int = None
+#     BUNDLE_BINARY: int = None
 
-    def __post_init__(self):
-        if ((not all(isinstance(i, str) for i in [self.file_name])) or
-            (not all(isinstance(i, (int, type(None))) for i in [self.DECISION_UNKNOWN, self.ALLOW_UNKNOWN, self.ALLOW_BINARY, self.ALLOW_CERTIFICATE, self.ALLOW_SCOPE, self.ALLOW_TEAMID, self.ALLOW_SIGNINGID, self.ALLOW_CDHASH, self.BLOCK_UNKNOWN, self.BLOCK_BINARY, self.BLOCK_CERTIFICATE, self.BLOCK_SCOPE, self.BLOCK_TEAMID, self.BLOCK_SIGNINGID, self.BLOCK_CDHASH, self.BUNDLE_BINARY]))):
-            raise Exception("Could not init EventSummary, wrong data type given.")
+#     def __post_init__(self):
+#         if ((not all(isinstance(i, str) for i in [self.file_name])) or
+#             (not all(isinstance(i, (int, type(None))) for i in [self.DECISION_UNKNOWN, self.ALLOW_UNKNOWN, self.ALLOW_BINARY, self.ALLOW_CERTIFICATE, self.ALLOW_SCOPE, self.ALLOW_TEAMID, self.ALLOW_SIGNINGID, self.ALLOW_CDHASH, self.BLOCK_UNKNOWN, self.BLOCK_BINARY, self.BLOCK_CERTIFICATE, self.BLOCK_SCOPE, self.BLOCK_TEAMID, self.BLOCK_SIGNINGID, self.BLOCK_CDHASH, self.BUNDLE_BINARY]))):
+#             raise Exception("Could not init EventSummary, wrong data type given.")
 
 
-@dataclass
-class MachineStatus():
-    clean_sync_by: datetime
-    n_rules_sent: int
-    sync_type: SyncType
-    last_check_in: datetime = None
-    last_clean_sync: datetime = None
+# @dataclass
+# class MachineStatus():
+#     clean_sync_by: datetime
+#     n_rules_sent: int
+#     sync_type: SyncType
+#     last_check_in: datetime = None
+#     last_clean_sync: datetime = None
 
-    def __post_init__(self):
-        self.sync_type = SyncType(self.SyncType)
+#     def __post_init__(self):
+#         self.sync_type = SyncType(self.SyncType)
 
-        if ((not all(isinstance(i, datetime) for i in [self.clean_sync_by])) or
-            (not all(isinstance(i, (datetime, type(None))) for i in [self.last_check_in, self.last_clean_sync])) or
-            (not all(isinstance(i, int) for i in [self.n_rules_sent]))):
-            raise Exception("Could not init MachineStatus, wrong data type given.")
+#         if ((not all(isinstance(i, datetime) for i in [self.clean_sync_by])) or
+#             (not all(isinstance(i, (datetime, type(None))) for i in [self.last_check_in, self.last_clean_sync])) or
+#             (not all(isinstance(i, int) for i in [self.n_rules_sent]))):
+#             raise Exception("Could not init MachineStatus, wrong data type given.")
 
 @dataclass
 class KrampusRule(Rule):
     server_last_edit_date: datetime = datetime.now(timezone.utc)
     targets: list[str] = None
     exclusions: list[str] = None
-    row_id: int = None
+    row_id = None
 
     def __post_init__(self):
         if ((not all(isinstance(i, (datetime, type(None))) for i in [self.server_last_edit_date])) or
-            (not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions])) or
-            (not all(isinstance(i, (int, type(None))) for i in [self.row_id]))):
+            (not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions]))):
             raise Exception("Could not init KrampusRule, wrong data type given.")
 
         if not self.targets:
@@ -298,7 +297,7 @@ class KrampusRule(Rule):
 class KrampusHostConfig(HostConfig):
     targets: list[str] = None
     exclusions: list[str] = None
-    row_id: int = None
+    row_id = None
 
     def __post_init__(self):
         if not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions]):
@@ -306,45 +305,4 @@ class KrampusHostConfig(HostConfig):
 
         if not self.targets:
             self.targets = ["all"]
-
-
-
-# ----------------------------------------
-#       Database Classes
-# ----------------------------------------  
-
-class DbRule():
-    data: dict
-
-    def __init__(self, data):
-        self.data = data 
-
-    def add(self, row_id: str=None) -> tuple[int, str]:
-        '''
-        Adds one row of data to the rules database, optionally at some specific row id.
-
-        Parameters:
-            collection: name of the collection to add data to
-            data: data for that row in the collection
-            row_id: desired id for new row in the collection
-
-        Returns:
-            int: http status code reflecting the success of the attempted action
-            str: description of action taken
-        '''
-    pass
-    
-
-class DbHostConfig():
-    data: dict
-
-    def __init__(self, data):
-        self.data = data 
-
-
-class DbEventSummary():
-    data: dict
-
-    def __init__(self, data):
-        self.data = data 
 
