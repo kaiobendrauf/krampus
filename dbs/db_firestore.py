@@ -6,19 +6,9 @@ import uuid
 from datetime import datetime, timezone
 from google.cloud import firestore
 
-from ..santa_classes import KrampusRule, KrampusHostConfig, DbRule, DbHostConfig, DbEventSummary
-
-is_full_event_handler = False
+is_full_event_handler = True
 is_summary_event_handler = True
 
-# --------------------------------------------------------------------------------
-#                                Required Classes
-# --------------------------------------------------------------------------------
-class Rule():
-    data: dict
-
-    def __init__(self, data):
-        self.data = data
 
 # --------------------------------------------------------------------------------
 #                                Required Functions
@@ -38,15 +28,21 @@ def setup():
 
     global db
     db = firestore.Client(project=gcp_proj_id, database=db_name)
+    logging.debug(f"Successfully created Firestore client in GCP project: {db.project}")
 
-def add(collection: str, data: dict, row_id: str=None) -> tuple[int, str]:
+    if not lookup_by_id('krampusinfo', '1'):
+        db.collection('krampusinfo').document('1').set({'last_rule_delete': datetime.now(timezone.utc)})
+
+
+def add(collection: str, data: dict) -> tuple[int, str]:
     '''
-    Adds one row of data to the database, optionally at some specific row id. For the "rules" collection the datetime a rule is added is tracked.
+    Adds one row of data to the database. 
+    For the "rules" collection, the datetime a rule is added is tracked.
+    All rows for all collections are given a 'row_id' if one is not provided.
 
     Parameters:
         collection: name of the collection to add data to
         data: data for that row in the collection
-        row_id: desired id for new row in the collection
 
     Returns:
         int: http status code reflecting the success of the attempted action
@@ -54,64 +50,17 @@ def add(collection: str, data: dict, row_id: str=None) -> tuple[int, str]:
     '''
     if collection == 'rules':
         data['server_last_edit_date'] = datetime.now(timezone.utc)
-    if row_id:
-        db.collection(collection).document(row_id).set(data)
-        return 200, f'Entry added to {collection}'
-    matches = list(get_doc_by_match(collection, data))
-    if len(matches) == 0:
-        doc = get_new_doc_id(collection)
-        db.collection(collection).document(doc).set(data)
-        return 200, f'Entry added to {collection}'
-    else:
-        return 200, f'Data already found in {collection}, so was not added.'
-
-def read(collection: str, limit: int, cursor: str=None) -> dict:
-    '''
-    Reads multiple rows of data from one collection, optionally starting at some cursor
-
-    Parameters:
-        collection: name of the collection to read from
-        limit: how many rows of data to read
-        cursor: cursor so that only data after cursor is read
-
-    Returns:
-        dict: dict containing list of data (key="data") and optionally a cursor (key="cursor") if there is more data to read
-    '''
-    data, cursor = get_all_docs(collection, limit, cursor)
-    if data:
-        if collection == 'rules':
-            # this data has server added fields that need to be removed
-            for row in data:
-                row.pop('server_last_edit_date')
-        if cursor:
-            return {'data': data, 'cursor': cursor}
+    if 'row_id' in data:
+        if lookup_by_id(collection, data['row_id']):
+            return 409, f'Conflict: data with this id ({data["row_id"]}) already exists in {collection}. New data could not be added at this id.)'
         else:
-            return {'data': data}
-    return {'data': []}
-
-def read_new_rules(date: datetime, limit: int, cursor: str=None) -> dict:
-    '''
-    Reads multiple rows of data from the rules collection that were edited after the given time point
-
-    Parameters:
-        date: datetime to read after (not inclusive)
-        limit: how many rows of data to read
-        cursor: cursor so that only data after cursor is read
-
-    Returns:
-        dict: dict containing list of rules (key="rules") and optionally a cursor (key="cursor") if there is more data to read
-    '''
-    data, cursor = get_all_docs_by_filter('rules', [('server_last_edit_date', '>', date)], limit=limit, cursor=cursor)
-    if data:
-        # this data has server added fields that need to be removed
-        for row in data:
-            row.pop('server_last_edit_date')
+            db.collection(collection).document(str(data['row_id'])).set(data)
     else:
-        data = []
-    if data and cursor:
-        return {"rules": data, "cursor": cursor}
-    else:
-        return {'rules': data}
+        update_time, row = db.collection(collection).add(data)
+        row.update({'row_id': row.id})
+        data['row_id'] = row.id
+    return 200, f'Entry added to {collection} with row_id {data['row_id']}'
+
 
 def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]:
     '''
@@ -127,45 +76,81 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    if collection == 'rules':
-        db.collection('krampusinfo').document('last_rule_delete').set({'date': datetime.now(timezone.utc)})
-    docs = list(get_doc_by_match(collection, data))
+    docs = lookup(collection, data)
     if len(docs) == 0:
         return 404, f'Data was not found in {collection} so could not be deleted.'
-    if len(docs) == 1:
-        db.collection(collection).document(docs[0].id).delete()
+    if len(rows) == 1:
+        delete_doc_by_id(collection, rows[0]['row_id'])
         return 200, f'Match found and deleted from {collection}.'
     if multiple:
-        for doc in docs:
-            db.collection(collection).document(doc.id).delete()
-        return 200, f'Multiple matches found in {collection}, all deleted.'
+        for row in rows:
+            delete_doc_by_id(collection, row['row_id'])
+        return 200, f'Multiple ({len(rows)}) matches found in {collection}, all deleted.'
     else:
         return 400, f'Included data has more than one match in {collection}. Please check database and request manually.'
 
-def get_last_rule_delete() -> datetime:
-    # Gets the datetime the last delete action is stored, returns None if no deletion has ever occured 
-    doc = get_doc_by_id('krampusinfo', 'last_rule_delete')
-    if doc.exists:
-        return doc.to_dict()['date']
-    else:
-        return None
 
-def lookup_by_id(collection: str, row_id: str) -> dict:
+def edit_fields(collection: str, data: dict) -> tuple[int, str]:
     '''
-    Returns the row in the collection matching the row id
+    Edits specified fields in row. 
+    Assumes data contains 'row_id' and that the row at 'row_id' exists.
+    For the "rules" collection the datetime a rule is added / edited is tracked.
 
     Parameters:
-        collection: name of the collection to read from
-        row_id: id of row to return
+        collection: name of the collection to edit
+        data: new data for that row in the collection, MUST include key 'row_id'.
 
     Returns:
-        dict: dict containing data at the given row id
-              returns None if no such row is found
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
     '''
-    result = get_doc_by_id(collection, row_id)
-    if not result.exists:
-        return None
-    return result.to_dict()
+    if 'row_id' not in data:
+        return 400,  f'Row provided does not contain a row_id, unkown which row to edit.'
+    if collection == 'rules':
+        data['server_last_edit_date'] = datetime.now(timezone.utc)
+    
+    row = lookup_by_id(collection, data['row_id'])
+    if row:
+        db.collection(collection).document(str(row_id)).update(data)
+        logging.debug(f'Edited fields of {data['row_id']} in {collection}')
+        return 200, f'Fields in row {data["row_id"]} edited in {collection}.'
+    else:
+        return 404, f"Row at row_id {data["row_id"]} not found in {collection}, so cannot be edited"
+
+
+def edit_row(collection: str, data: dict) -> tuple[int, str]:
+    '''
+    Edits specified row in collection.
+    Assumes data contains 'row_id' and that the row at 'row_id' exists.
+    For the "rules" collection the datetime a rule is added / edited is tracked.
+
+    Parameters:
+        collection: name of the collection to edit
+        data: new data for that row in the collection, MUST include key 'row_id'.
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    if 'row_id' not in data:
+        return 400,  f'Row provided does not contain a row_id, unkown which row to edit.'
+    if collection == 'rules':
+            data['server_last_edit_date'] = datetime.now(timezone.utc)
+    row = lookup_by_id(collection, data['row_id'])
+    if row:
+        logging.debug(f'Edited entry {data['row_id']} in {collection}')
+        db.collection(collection).document(str(row_id)).set(data)
+        return 200, f'Entry {row["row_id"]} edited in {collection}'
+    else:
+        return 404, f'Row at row_id {data["row_id"]} not found in {collection}, so cannot be edited.'
+
+
+def get_last_rule_delete() -> datetime:
+    # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occured 
+    row = lookup_by_id('krampusinfo', 1)
+    if row:
+        return row['last_rule_delete']
+
 
 def lookup(collection: str, data: dict) -> list:
     '''
@@ -178,115 +163,118 @@ def lookup(collection: str, data: dict) -> list:
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data
     '''
-    result = list(get_doc_by_match(collection, data))
-    result = [doc.to_dict() for doc in result]
-    return result
+    query = db.collection(collection)
+    for key in data:
+        # Create a query against the collection
+        query = query.where(filter=firestore.FieldFilter(key, '==', data[key]))
+    docs = query.stream()
+    return [doc.to_dict() for doc in result]
 
-def edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
+
+def lookup_by_id(collection: str, row_id) -> dict:
     '''
-    Edits specified row to match data. For the "rules" collection the datetime a rule is added / edited is tracked.
+    Returns the row in the collection matching the row id
 
     Parameters:
-        collection: name of the collection to edit
-        data: new data for that row in the collection
-        row_id: id of row ro edit
+        collection: name of the collection to read from
+        row_id: id of row to return
 
     Returns:
-        int: http status code reflecting the success of the attempted action
-        str: description of action taken
+        dict: dict containing data at the given row id
+              returns None if no such row is found
     '''
-    doc = get_doc_by_id(collection, row_id)
+    doc = db.collection(collection).document(str(row_id)).get()
     if doc.exists:
-        if collection == 'rules':
-            data['server_last_edit_date'] = datetime.now(timezone.utc)
-        db.collection(collection).document(row_id).set(data)
-        return 200, f'Entry {row_id} edited in {collection}'
-    else:
-        return 404, f"Data {row_id} not found in {collection}, so cannot be edited"
+        return doc.to_dict()
 
-def add_or_edit(collection: str, data: dict, row_id: str) -> tuple[int, str]:
+
+def lookup_hostconfig_by_target(target: str) -> list:
     '''
-    Edits one row of data to the database, or edits it if the row id already exists. For the "rules" collection the datetime a rule is added / edited is tracked.
+    Returns all hostconfigs in the collection that apply to a given target
 
     Parameters:
-        collection: name of the collection to add data to
-        data: data for that row in the collection
-        row_id: desired id for new row in the collection
+        targer: the target of the hostconfig
 
     Returns:
-        int: http status code reflecting the success of the attempted action
-        str: description of action taken
+        list: list of dicts, where every dict reflects one row in the database matching the given data
     '''
-    if collection == 'rules':
-        data['server_last_edit_date'] = datetime.now(timezone.utc)
-    db.collection(collection).document(row_id).set(data)
-    return 200, f'Entry added to (or edited in) {collection}'
+    docs = db.collection(collection).where(filter=firestore.FieldFilter(target, 'in', 'targets'))
+    return [doc.to_dict() for doc in result]
 
+
+def read(collection: str, limit: int, cursor = None) -> dict:
+    '''
+    Reads multiple rows of data from one collection, optionally starting at some cursor
+
+    Parameters:
+        collection: name of the collection to read from
+        limit: how many rows of data to read
+        cursor: optional cursor so that only data after cursor is read (type determined by database)
+
+    Returns:
+        dict: dict containing list of data (key='data') and optionally a cursor (key='cursor') if there is more data to read
+    '''
+    docs = get_all_docs(collection, limit+1, cursor)
+
+    if collection == 'rules':
+        # this data has server added fields that need to be removed
+        docs = [doc.pop('server_last_edit_date') for doc in docs]
+    if len(docs) > limit:
+        docs.pop()
+        return {'data': rows, 'cursor': rows[-1]['row_id']}
+    else:
+        return {'data': rows}
+
+
+def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
+    '''
+    Reads multiple rows of data from the rules collection that were edited after the given time point
+
+    Parameters:
+        date: datetime to read after (not inclusive)
+        limit: how many rows of data to read
+        cursor: optional cursor so that only data after cursor is read (type determined by database)
+
+    Returns:
+        dict: dict containing list of rules (key='rules') and optionally a cursor (key='cursor') if there is more data to read
+    '''
+    if cursor:
+        cursor_doc = get_doc_by_id(collection, cursor)
+        docs = db.collection(collection).start_after(cursor_doc).limit(limit+1).where(filter=firestore.FieldFilter('server_last_edit_date', '>', date)).stream()
+    else:
+        docs = db.collection(collection).start_after(cursor_doc).limit(limit+1).where(filter=firestore.FieldFilter('server_last_edit_date', '>', date)).stream()
+    
+    docs = [doc.to_dict() for doc in docs]
+
+    # this data has server added fields that need to be removed
+    docs = [doc.pop('server_last_edit_date') for doc in docs]
+    
+    if len(docs) > limit:
+        docs.pop()
+        return {'data': docs, 'cursor': docs[-1]['row_id']}
+    else:
+        return {'data': rows}
 
 # --------------------------------------------------------------------------------
 #                                Helper Functions
 # --------------------------------------------------------------------------------
-def get_new_doc_id(collection):
-    while True:
-        result = str(uuid.uuid4())
-        if not get_doc_by_id(collection, result).exists:
-            return result
-
-def get_doc_by_id(collection, doc):
-    doc_ref = db.collection(collection).document(doc)
-    return doc_ref.get()
-
-def get_doc_by_match(collection, data):
-    query_ref = db.collection(collection)
-    for key in data:
-        # Create a query against the collection
-        query_ref = query_ref.where(filter=firestore.FieldFilter(key, "==", data[key]))
-    results = query_ref.stream()
-    return results
+def delete_doc_by_id(collection, row_id):
+    db.collection(collection).document(str(row_id)).delete()
+    logging.debug(f'Deleted row {row_id} from {collection}.')
+    store_delete_time(collection)
 
 def get_all_docs(collection, limit=None, cursor=None):
     if limit:
         if cursor:
             cursor_doc = get_doc_by_id(collection, cursor)
-            query = db.collection(collection).start_after(cursor_doc).limit(limit+1)
+            query = db.collection(collection).start_after(cursor_doc).limit(limit)
         else:
-            query = db.collection(collection).limit(limit+1)
-        docs = list(query.stream())
-        if len(docs) > 0:
-            if len(docs) > limit:
-                # more to read
-                docs = docs[:-1]
-                last_doc = list(docs)[-1]
-                return [doc.to_dict() for doc in docs], last_doc.id
-            else:
-                # done reading
-                return [doc.to_dict() for doc in docs], None
-        else:
-            return None, None
-    else:
-        docs = db.collection(collection).stream()
-        return [doc.to_dict() for doc in docs], None
+            query = db.collection(collection).limit(limit)
+        docs = query.stream()
+        return [doc.to_dict() for doc in docs]
 
-def get_all_docs_by_filter(collection, filters, limit=None, cursor=None):
-    # create query
-    query = db.collection(collection)
-    if cursor:
-        query.start_after(cursor)
-    if limit:
-        query.limit(limit+1)
-    # add filters
-    for key, comp, val in filters:
-        # Create a query against the collection
-        query = query.where(filter=firestore.FieldFilter(key, comp, val))
-    docs = list(query.stream())
-    if len(docs) > 0:
-        if len(docs) > limit:
-            # more to read
-            docs = docs[:-1]
-            last_doc = list(docs)[-1]
-            return [doc.to_dict() for doc in docs], last_doc.id
-        else:
-            # done reading
-            return [doc.to_dict() for doc in docs], None
-    else:
-        return None, None
+def store_delete_time(collection):
+    if collection == 'rules':
+        db.collection('krampusinfo').document('1').update({'last_rule_delete': datetime.now(timezone.utc)})
+
+

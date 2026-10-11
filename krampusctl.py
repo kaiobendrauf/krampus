@@ -12,16 +12,26 @@ from santa_classes import KrampusHostConfig, KrampusRule
 # ----------------------------------------
 #          server requests
 # ----------------------------------------
-def server_req(url, data, accept_any_response=False):
+def server_req(url, data, accepted_errors=[], fail_on_errors=[]):
     for i in range(3):
         req_result = send_authenticated_request(url, data)
         result = req_result
-        if accept_any_response or req_result.status_code < 300:
+        if req_result.status_code < 300:
             if not req_result.headers.get('content-type') == 'application/json':
                 logging.debug(req_result.text)
             return req_result
+        elif req_result.status_code in accepted_errors:
+            logging.warning(req_result.text)
+            logging.debug(row)
+            return req_result
+        elif req_result.status_code in fail_on_errors:
+            logging.error(f'Error {req_result.status_code}. {req_result.text}')
+            logging.debug(row)
+            logging.error(f'Cannot continue.')
+            sys.exit(1)
         else:
             logging.error(f'Error {req_result.status_code}. {req_result.text}')
+            logging.debug(row)
     logging.error(f'Cannot continue.')
     sys.exit(1)
 
@@ -49,15 +59,15 @@ def replicate(data, server_url, limit):
         while 'cursor' in req_result:
             # still reading
             # process data (note data that does not need to be added, delete what needs to be deleted)
-            collection_data = process_replicate_chunk(req_result['data'], collection_data, collection, f'{server_url}/db-del/{collection}')
+            collection_data = process_replicate_chunk(req_result['data'], collection_data, collection, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
             # get new data
             req_result = server_req(url, {'limit': limit, 'cursor':req_result['cursor']})
             req_result = process_rep_response(req_result)
         # process last data chunk
-        collection_data = process_replicate_chunk(req_result['data'], collection_data, collection, f'{server_url}/db-del/{collection}')
+        collection_data = process_replicate_chunk(req_result['data'], collection_data, collection, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
         # for collection add all missing data
         for d in collection_data:
-            server_req(f'{server_url}/db-add/{collection}', d)
+            server_req(f'{server_url}/db-add/{collection}', d, fail_on_errors=[409])
 
 def process_rep_response(req_res):
     # if request contains json
@@ -70,64 +80,54 @@ def process_rep_response(req_res):
     logging.error('Unexpected response from server. Cannot continue.')
     sys.exit(1)
 
-def process_replicate_chunk(response_data, data, collection, del_url):
+def process_replicate_chunk(response_data, data, collection, del_url, edit_url):
     # print(f'processing chunk. response data size {len(response_data)}, data size {len(data)}')
     new_data = data.copy()
     for i, d in enumerate(data):
-        match = check_dict_to_database(response_data, d)
+        match, is_full_match = check_dict_to_database(response_data, d)
         if match:
-            # new data does not need to be added
-            new_data.remove(d)
             #  old data does not need to be deleted
             response_data.remove(match)
+            # new data does not need to be added
+            new_data.remove(d)
+            # new data may need to be edited
+            if not is_full_match:
+                #  not full match needs to be edited, not added
+                server_req(edit_url, d, fail_on_errors=[404, 400])
+    # old data with no matches needs to be deleted
     for d in response_data:
-        server_req(del_url, d)
+        server_req(del_url, d, fail_on_errors=[404, 400])
     return new_data
 
 def check_dict_to_database(database, d):
-    # print('\n\n----------------------')
-    # print('looking for match for')
-    # print(d)
-    # print('\n')
-    for data in database:
-        # print(f'checking: {data}')
-        match = True
-        for key in d:
-            if match and not(key in data and data[key] == d[key]):
-                # if key in data:
-                #     print(f'not a match because {key} is {data[key]} instead of {d[key]}')
-                # else: 
-                #     print(f'not a match because {key} is missing')
-                match = False
-        for key in set(data.keys()).difference(set(d.keys())):
-            if match and key != 'row_id' and (not (data[key] == None)):
-                # print(f'not a match because new {key} is {data[key]} instead of not existing')
-                match = False
-        if match:
-            # print('match!')
-            return data
-    #     print('\n')
-    # print('no match found\n')
+    id_match = False
+    if 'row_id' in d:
+        # match counts as any row with the same id
+        for data in database:
+            if 'row_id' in data and data['row_id'] == d['row_id']:
+                return data, is_dict_match(d, data)
+    else:
+        # match has to be a full match
+        for data in database:
+            if is_dict_match(d, data):
+                return data, True
+    return None, None
+
+def is_dict_match(d1, d2):
+    match = True
+    for key in d1:
+        if match and not(key in d2 and d2[key] == d1[key]):
+            match = False
+    for key in set(d2.keys()).difference(set(d1.keys())):
+        if match and key != 'row_id' and (not (d2[key] == None)):
+            match = False
+    return match
 
 def add(data, server_url):
     for collection in data:
         logging.debug(f'Adding to {collection}')
         for row in data[collection]:
-            for _ in range(3):
-                success = False
-                req_result = server_req(f'{server_url}/db-add/{collection}', row, True)
-                if req_result.status_code < 300:
-                    success = True
-                    logging.info(f'Added row to {collection}: {row}')
-                    break
-                else:
-                    logging.error(f'Error {req_result.status_code}. {req_result.text}')
-                    if req_result.status_code == 409:
-                        logging.debug(row)
-                        sys.exit(1)
-            if not success:
-                logging.error(f'Cannot continue.')
-                sys.exit(1)
+            req_result = server_req(f'{server_url}/db-add/{collection}', row, fail_on_errors=[409])
 
 def edit_row(data, server_url):
     for collection in data:
@@ -136,7 +136,7 @@ def edit_row(data, server_url):
             if 'row_id' not in row:
                 logging.error(f'Can only edit rows with a known id. The following row in {collection} is missing an id:\n{row}')
                 sys.exit(1)
-            server_req(f'{server_url}/db-edit-row/{collection}', row)
+            server_req(f'{server_url}/db-edit-row/{collection}', row, fail_on_errors=[404])
 
 def edit_fields(data, server_url):
     for collection in data:
@@ -145,54 +145,19 @@ def edit_fields(data, server_url):
             if 'row_id' not in row:
                 logging.error(f'Can only edit rows with a known id. The following row in {collection} is missing an id:\n{row}')
                 sys.exit(1)
-            server_req(f'{server_url}/db-edit-fields/{collection}', row)
+            server_req(f'{server_url}/db-edit-fields/{collection}', row, fail_on_errors=[404])
 
 def delete(data, server_url):
     for collection in data:
         for row in data[collection]:
             success = False
-            for i in range(3):
-                req_result = server_req(f'{server_url}/db-del/{collection}', row, True)
-                if req_result.status_code == 404:
-                    logging.warning(req_result.text)
-                    logging.debug(row)
-                    success = True
-                    break
-                elif req_result.status_code == 400:
-                    logging.warning(req_result.text)
-                    logging.debug(row)
-                    success = True
-                    break
-                elif req_result.status_code >= 300:
-                    logging.error(f'Error {req_result.status_code}. {req_result.text}')
-                else:
-                    success = True
-                    break
-            if not success:
-                logging.error(f'Cannot continue.')
-                sys.exit(1)
+            req_result = server_req(f'{server_url}/db-del/{collection}', row, accepted_errors=[400, 404])
 
 def delete_multiple(data, server_url):
     for collection in data:
         for row in data[collection]:
             success = False
-            for i in range(3):
-                req_result = server_req(f'{server_url}/db-del-multiple/{collection}', row, True)
-                if req_result.status_code == 404:
-                    logging.warning(req_result.text)
-                    logging.debug(row)
-                    success = True
-                    break
-                elif req_result.status_code >= 300:
-                    logging.error(f'Error {req_result.status_code}. {req_result.text}')
-                    logging.error(f'Cannot continue.')
-                    sys.exit(1)
-                else:
-                    success = True
-                    break
-            if not success:
-                logging.error(f'Cannot continue.')
-                sys.exit(1)
+            req_result = server_req(f'{server_url}/db-del/{collection}', row, accepted_errors=[404])
 
 def check_hostconfigs(l):
     for row in l:

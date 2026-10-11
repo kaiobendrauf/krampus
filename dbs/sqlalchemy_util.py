@@ -136,71 +136,30 @@ def add(collection: str, data: dict) -> tuple[int, str]:
     add_to_lists_database(targets, exclusions, groups, collection, row_id)
     
     logging.debug(f'Added entry {row_id} to {collection}')
-    return 200, f'Entry added to {collection}'
+    return 200, f'Entry added to {collection} at row_id {row_id}'
+
+# def add_or_edit(collection: str, data: dict) -> tuple[int, str]:
+#     '''
+#     Adds one row of the database, or edits it if data contains an row_id and that row_id already exists in the database. 
+#     For the "rules" collection the datetime a rule is added / edited is tracked.
+
+#     Parameters:
+#         collection: name of the collection to add data to
+#         data: data to get updated in that row in the collection
+
+#     Returns:
+#         int: http status code reflecting the success of the attempted action
+#         str: description of action taken
+#     '''
+#     if 'row_id' in data and lookup_by_id(collection, data['row_id']):
+#         # edit
+#         return edit_row(collection, data)
+#     else:
+#         # add
+#         return add(collection, data)
 
 
-def read(collection: str, limit: int, cursor = None) -> dict:
-    '''
-    Reads multiple rows of data from one collection, optionally starting at some cursor
-
-    Parameters:
-        collection: name of the collection to read from
-        limit: how many rows of data to read
-        cursor: cursor so that only data after cursor is read (type determined by database)
-
-    Returns:
-        dict: dict containing list of data (key="data") and optionally a cursor (key="cursor") if there is more data to read
-    '''
-    data = get_all_rows(collection, limit=limit+1, cursor=cursor)
-
-    data = [add_lists(row, collection) for row in data]
-
-    if collection == 'rules':
-        # this data has server added fields that need to be removed
-        for row in data:
-            row.pop('server_last_edit_date')
-    if len(data) > limit:
-        last = data.pop()
-        return {'data': data, 'cursor': last['row_id']}
-    else:
-        return {'data': data}
-
-
-def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
-    '''
-    Reads multiple rows of data from the rules collection that were edited after the given time point
-
-    Parameters:
-        date: datetime to read after (not inclusive)
-        limit: how many rows of data to read
-        cursor: cursor so that only data after cursor is read (type determined by database)
-
-    Returns:
-        dict: dict containing list of rules (key="rules") and optionally a cursor (key="cursor") if there is more data to read
-    '''
-
-    tbl = get_table('rules')
-    if cursor:
-        with db.connect() as conn:
-            rows = conn.execute(select(tbl).where(tbl.c.row_id > cursor).where(tbl.c.server_last_edit_date > date).order_by(tbl.c.row_id).limit(limit+1))
-    else:
-        with db.connect() as conn:
-            rows = conn.execute(select(tbl).where(tbl.c.server_last_edit_date > date).order_by(tbl.c.row_id).limit(limit+1))
-    rows = [dict(row._mapping) for row in rows]
-
-    rows = [add_lists(row, 'rules') for row in rows]
-
-    # this data has server added fields that need to be removed
-    [row.pop('server_last_edit_date') for row in rows]
-    
-    if len(rows) > limit:
-        last = rows.pop()
-        return {'data': rows, 'cursor': last['row_id']}
-    else:
-        return {'data': rows}
-
-
-def delete(collection: str, data: dict, multiple: bool = False) -> tuple[int, str]:
+def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]:
     '''
     Deletes data from the database that matches data given. For the "rules" collection, the datetime of the last delete action is stored 
 
@@ -228,32 +187,73 @@ def delete(collection: str, data: dict, multiple: bool = False) -> tuple[int, st
         return 400, f'Included data has more than one match in {collection}. Please check database and request manually.'
 
 
+def edit_fields(collection: str, data: dict) -> tuple[int, str]:
+    '''
+    Edits specified fields in row. 
+    Assumes data contains 'row_id' and that the row at 'row_id' exists.
+    For the "rules" collection the datetime a rule is added / edited is tracked.
+
+    Parameters:
+        collection: name of the collection to edit
+        data: new data for that row in the collection, MUST include key 'row_id'.
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    if 'row_id' not in data:
+        return 400,  f'Row provided does not contain a row_id, unkown which row to edit.'
+    if collection == 'rules':
+        data['server_last_edit_date'] = datetime.now(timezone.utc)
+    
+    targets = data.pop('targets', None)
+    exclusions = data.pop('exclusions', None)
+    groups = data.pop('primary_user_groups', None)
+    
+    row = lookup_by_id(collection, data['row_id'])
+    if row:
+        with db.connect() as conn:
+            t = get_table(collection)
+            conn.execute(update(t).where(t.c.row_id == data['row_id']).values(**data))
+            conn.commit()
+        add_to_lists_database(targets, exclusions, groups, collection, data['row_id'], True)
+        logging.debug(f'Edited fields of {data['row_id']} in {collection}')
+        return 200, f'Fields in row {data["row_id"]} edited in {collection}.'
+    else:
+        return 404, f"Row at row_id {data["row_id"]} not found in {collection}, so cannot be edited"
+
+
+def edit_row(collection: str, data: dict) -> tuple[int, str]:
+    '''
+    Edits specified row in collection.
+    Assumes data contains 'row_id' and that the row at 'row_id' exists.
+    For the "rules" collection the datetime a rule is added / edited is tracked.
+
+    Parameters:
+        collection: name of the collection to edit
+        data: new data for that row in the collection, MUST include key 'row_id'.
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    if 'row_id' not in data:
+        return 400,  f'Row provided does not contain a row_id, unkown which row to edit.'
+    if collection == 'rules':
+            data['server_last_edit_date'] = datetime.now(timezone.utc)
+    row = lookup_by_id(collection, data['row_id'])
+    if row:
+        delete_row_by_id(collection, data['row_id'])
+        add(collection, data)
+        return 200, f'Entry {row["row_id"]} edited in {collection}'
+    else:
+        return 404, f'Row at row_id {data["row_id"]} not found in {collection}, so cannot be edited.'
+
 def get_last_rule_delete() -> datetime:
     # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occured 
     row = lookup_by_id('krampusinfo', 1)
     if row:
         return row['last_rule_delete']
-
-
-def lookup_by_id(collection: str, row_id: str) -> dict:
-    '''
-    Returns the row in the collection matching the row id
-
-    Parameters:
-        collection: name of the collection to read from
-        row_id: id of row to return
-
-    Returns:
-        dict: dict containing data at the given row id
-              returns None if no such row is found
-    '''
-    tbl = get_table(collection)
-    with db.connect() as conn:
-        data = conn.execute(select(tbl).where(tbl.c.row_id == row_id)).first()
-    if data:
-        if collection in ['rules', 'hostconfigs', 'machinestatus']:
-            return add_lists(dict(data._mapping), collection)
-        return dict(data._mapping)
 
 
 def lookup(collection: str, data: dict) -> list:
@@ -282,6 +282,28 @@ def lookup(collection: str, data: dict) -> list:
 
     return results
 
+
+def lookup_by_id(collection: str, row_id: str) -> dict:
+    '''
+    Returns the row in the collection matching the row id
+
+    Parameters:
+        collection: name of the collection to read from
+        row_id: id of row to return
+
+    Returns:
+        dict: dict containing data at the given row id
+              returns None if no such row is found
+    '''
+    tbl = get_table(collection)
+    with db.connect() as conn:
+        data = conn.execute(select(tbl).where(tbl.c.row_id == row_id)).first()
+    if data:
+        if collection in ['rules', 'hostconfigs', 'machinestatus']:
+            return add_lists(dict(data._mapping), collection)
+        return dict(data._mapping)
+
+
 def lookup_hostconfig_by_target(target: str) -> list:
     '''
     Returns all hostconfigs in the collection that apply to a given target
@@ -302,136 +324,68 @@ def lookup_hostconfig_by_target(target: str) -> list:
     return results
 
 
-def edit_row(collection: str, data: dict) -> tuple[int, str]:
+def read(collection: str, limit: int, cursor = None) -> dict:
     '''
-    Edits specified row at a given id to match data. 
-    For the "rules" collection the datetime a rule is added / edited is tracked.
+    Reads multiple rows of data from one collection, optionally starting at some cursor
 
     Parameters:
-        collection: name of the collection to edit
-        data: new data for that row in the collection, MUST include key 'id'.
+        collection: name of the collection to read from
+        limit: how many rows of data to read
+        cursor: optional cursor so that only data after cursor is read (type determined by database)
 
     Returns:
-        int: http status code reflecting the success of the attempted action
-        str: description of action taken
+        dict: dict containing list of data (key='data') and optionally a cursor (key='cursor') if there is more data to read
     '''
-    if 'row_id' not in data:
-        return 400,  f'Row provided does not contain an id, unkown which row to edit.'
+    rows = get_all_rows(collection, limit=limit+1, cursor=cursor)
+
+    rows = [add_lists(row, collection) for row in rows]
+
     if collection == 'rules':
-            data['server_last_edit_date'] = datetime.now(timezone.utc)
-    row = lookup_by_id(collection, data['row_id'])
-    if row:
-        delete_row_by_id(collection, data['row_id'])
-        add(collection, data)
-        return 200, f'Entry {row["row_id"]} edited in {collection}'
+        # this data has server added fields that need to be removed
+        rows = [row.pop('server_last_edit_date') for row in rows]
+    if len(rows) > limit:
+        rows.pop()
+        return {'data': rows, 'cursor': rows[-1]['row_id']}
     else:
-        return 404, f'Row at id {data["row_id"]} not found in {collection}, so cannot be edited.'
+        return {'data': rows}
 
-def edit_fields(collection: str, data: dict) -> tuple[int, str]:
+
+def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
     '''
-    Edits specified fields in row at a given id updated to match data. 
-    For the "rules" collection the datetime a rule is added / edited is tracked.
+    Reads multiple rows of data from the rules collection that were edited after the given time point
 
     Parameters:
-        collection: name of the collection to edit
-        data: new data for that row in the collection, MUST include key 'id'.
+        date: datetime to read after (not inclusive)
+        limit: how many rows of data to read
+        cursor: optional cursor so that only data after cursor is read (type determined by database)
 
     Returns:
-        int: http status code reflecting the success of the attempted action
-        str: description of action taken
+        dict: dict containing list of rules (key='rules') and optionally a cursor (key='cursor') if there is more data to read
     '''
-    if 'row_id' not in data:
-        return 400,  f'Row provided does not contain an id, unkown which row to edit.'
-    if collection == 'rules':
-        data['server_last_edit_date'] = datetime.now(timezone.utc)
-    
-    targets = data.pop('targets', None)
-    exclusions = data.pop('exclusions', None)
-    groups = data.pop('primary_user_groups', None)
-    
-    row = lookup_by_id(collection, data['row_id'])
-    if row:
+    tbl = get_table('rules')
+    if cursor:
         with db.connect() as conn:
-            t = get_table(collection)
-            conn.execute(update(t).where(t.c.row_id == data['row_id']).values(**data))
-            conn.commit()
-        add_to_lists_database(targets, exclusions, groups, collection, data['row_id'], True)
-        logging.debug(f'Edited entry {data['row_id']} in {collection}')
-        return 200, f'Fields in row {data["row_id"]} edited in {collection}.'
+            rows = conn.execute(select(tbl).where(tbl.c.row_id > cursor).where(tbl.c.server_last_edit_date > date).order_by(tbl.c.row_id).limit(limit+1))
     else:
-        return 404, f"Data {data["row_id"]} not found in {collection}, so cannot be edited"
+        with db.connect() as conn:
+            rows = conn.execute(select(tbl).where(tbl.c.server_last_edit_date > date).order_by(tbl.c.row_id).limit(limit+1))
+    rows = [dict(row._mapping) for row in rows]
 
+    rows = [add_lists(row, 'rules') for row in rows]
 
-def add_or_edit(collection: str, data: dict) -> tuple[int, str]:
-    '''
-    Edits one row of data to the database, or edits it if the row contains an id and that id already exists. 
-    For the "rules" collection the datetime a rule is added / edited is tracked.
-
-    Parameters:
-        collection: name of the collection to add data to
-        data: data for that row in the collection
-        row_id: desired id for new row in the collection
-
-    Returns:
-        int: http status code reflecting the success of the attempted action
-        str: description of action taken
-    '''
-    if 'row_id' in data and get_row_by_id(collection, data['row_id']):
-        # edit
-        return edit_row(collection, data)
+    # this data has server added fields that need to be removed
+    rows =[row.pop('server_last_edit_date') for row in rows]
+    
+    if len(rows) > limit:
+        rows.pop()
+        return {'data': rows, 'cursor': rows[-1]['row_id']}
     else:
-        # add
-        return add(collection, data)
+        return {'data': rows}
 
 
 # --------------------------------------------------------------------------------
 #                                Helper Functions
 # --------------------------------------------------------------------------------
-
-def get_table(collection):
-    return Table(collection, MetaData(), autoload_with=db)
-
-
-def get_all_rows(collection, limit=None, cursor=None):
-    tbl = get_table(collection)
-    if cursor:
-        with db.connect() as conn:
-            rows = conn.execute(select(tbl).where(tbl.c.row_id > cursor).order_by(tbl.c.row_id).limit(limit))
-    else:
-        with db.connect() as conn:
-            rows = conn.execute(select(tbl).order_by(tbl.c.row_id).limit(limit))
-    return [dict(row._mapping) for row in rows]
-
-
-def delete_row_by_id(collection, i):
-    tbl = get_table(collection)
-    with db.connect() as conn:
-        rows = conn.execute(sqldelete(tbl).where(tbl.c.row_id == i))
-        conn.commit()
-    logging.debug(f'Deleted row {i} from {collection}.')
-    if collection in ['rules', 'hostconfigs']:
-        delete('targets', {'table': collection, 'linked_id': i}, True)
-    elif collection == 'machinestatus':
-        delete('usergroups', {'linked_id': i}, True)
-    store_delete_time(collection)
-
-    # for col in cols:
-    #     if col.key in data:
-    #         stmt.where(col == data[col.key])
-
-    # for k, v in get_column_values(tbl).items():
-    #     stmt = stmt.where(getattr(User, k) == v)
-    # if cursor:
-    #     with db.connect() as conn:
-    #         rows = conn.execute(select(tbl).where(tbl.c.row_id > cursor).limit(limit))
-    # else:
-    #     with db.connect() as conn:
-    #         rows = conn.execute(select(tbl).limit(limit))
-    # data = []
-    # for row in rows:
-    #     data.append(dict(row._mapping))
-    # return data
-
 def add_lists(data, table):
     if table in ['rules', 'hostconfigs']:
         targets = []
@@ -469,6 +423,18 @@ def add_to_lists_database(targets, exclusions, groups, table, linked_id, delete_
         for group in groups:
             add('targets', {'linked_id': linked_id, 'group': group})
 
+def delete_row_by_id(collection, i):
+    tbl = get_table(collection)
+    with db.connect() as conn:
+        rows = conn.execute(sqldelete(tbl).where(tbl.c.row_id == i))
+        conn.commit()
+    logging.debug(f'Deleted row {i} from {collection}.')
+    if collection in ['rules', 'hostconfigs']:
+        delete('targets', {'table': collection, 'linked_id': i}, True)
+    elif collection == 'machinestatus':
+        delete('usergroups', {'linked_id': i}, True)
+    store_delete_time(collection)
+
 def filter_matches_by_lists(collection, targets, groups, exclusions, results):
     if collection in ['rules', 'hostconfigs', 'machinestatus']:
         old_results = [add_lists(row, collection) for row in results]
@@ -494,6 +460,19 @@ def filter_matches_by_lists(collection, targets, groups, exclusions, results):
             if to_add:
                 results.append(result)
     return results
+
+def get_all_rows(collection, limit=None, cursor=None):
+    tbl = get_table(collection)
+    if cursor:
+        with db.connect() as conn:
+            rows = conn.execute(select(tbl).where(tbl.c.row_id > cursor).order_by(tbl.c.row_id).limit(limit))
+    else:
+        with db.connect() as conn:
+            rows = conn.execute(select(tbl).order_by(tbl.c.row_id).limit(limit))
+    return [dict(row._mapping) for row in rows]
+
+def get_table(collection):
+    return Table(collection, MetaData(), autoload_with=db)
 
 def store_delete_time(collection):
     if collection == 'rules':

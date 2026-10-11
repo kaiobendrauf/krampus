@@ -70,57 +70,11 @@ def setup_db():
         sys.exit(1)
     db.setup()
 
-# def add_to_db(collection, data):
-    #     try:
-    #         # hostconfig = KrampusHostConfig(**data)
-    #         if db.lookup_by_id(collection, hostconfig.target):
-    #             return 409, f'Hostconfig with target {hostconfig.target} already exists.'
-    #         else:
-    #             return db.add(collection, hostconfig, hostconfig.target)   
-    #     except Exception as e:
-    #         logging.warning(f'Invalid hostconfig provided so could not be added to the database.\n{data}')
-    #         logging.warning(e, exc_info=True)
-    #         return 400, f'Invalid hostconfig provided.\n{e}\n{data}'
-    # if collection == 'rules':
-    #     try:
-    #         # rule = KrampusRule(**data)
-    #         if db.lookup_by_id(collection, rule.identifier):
-    #             return 409, f'Hostconfig with target {target} already exists.'
-    #         else:
-    #             return db.add(collection, rule, rule.identifier)   
-    #     except Exception as e:
-    #         logging.warning(f'Invalid rule provided so could not be added to the database\n{data}')
-    #         logging.warning(e, exc_info=True)
-    #         return 400, f'Invalid rule provided so could not be added to the database\n{e}\n{data}'
-    # return db.add(collection, data)
-
-# def add_edit_db(collection, data):
-    # if collection == 'hostconfigs':
-    #     if 'target' in data:
-    #         target = data['target']
-    #     else:
-    #         target = 'all'
-    #     return db.add_or_edit(collection, data, target)
-    # if collection == 'rules':
-    #     if 'identifier' in data:
-    #         return db.add_or_edit(collection, data, data['identifier'])
-    #     else:
-    #         return 400, f'Rule provided has no identifier.\n{data}'
-    # return 400, f'Unkown collection {collection}, thus unkown identifier for data.\n{data}'
-
-# def edit_db(collection, data):
-#     if collection == 'hostconfigs':
-#         if 'target' in data:
-#             target = data['target']
-#         else:
-#             target = 'all'
-#         return db.edit(collection, data, target)
-#     if collection == 'rules':
-#         if 'identifier' in data:
-#             return db.edit(collection, data, data['identifier'])
-#         else:
-#             return 400, f'Rule provided has no identifier.\n{data}'
-#     return 400, f'Unkown collection {collection}, thus unkown identifier for data.\n{data}'
+def validate_data(collection, data):
+    if collection == 'rules':
+        KrampusRule(data)
+    if collection == 'hostconfigs':
+        KrampusHostConfig(data)
 
 # ----------------------------------------
 #            Event Handler
@@ -237,6 +191,7 @@ def db_add(collection):
     if auth_ctl.auth_ctl(flask.request):
         if flask.request.content_type == 'application/json':
             data = flask.request.get_json()
+            validate_data(collection, data)
             status_code, text = db.add(collection, data)
             return flask.Response(text, status=status_code)
         else:
@@ -245,19 +200,19 @@ def db_add(collection):
         logging.warning(f'Attempted db-add request failed because authentication failed.')
         flask.abort(403)
 
-@server.route('/db-add-edit/<collection>', methods=['POST'])
-def db_add_or_edit(collection):
-    logging.debug(f'add/edit request for {collection}')
-    if auth_ctl.auth_ctl(flask.request):
-        if flask.request.content_type == 'application/json':
-            data = flask.request.get_json()
-            status_code, text = add_edit_db(collection, data)
-            return flask.Response(text, status=status_code)
-        else:
-            flask.abort(415)
-    else:
-        logging.warning(f'Attempted db-add-edit request failed because authentication failed.')
-        flask.abort(403)
+# @server.route('/db-add-edit/<collection>', methods=['POST'])
+# def db_add_or_edit(collection):
+#     logging.debug(f'add/edit request for {collection}')
+#     if auth_ctl.auth_ctl(flask.request):
+#         if flask.request.content_type == 'application/json':
+#             data = flask.request.get_json()
+#             status_code, text = add_edit_db(collection, data)
+#             return flask.Response(text, status=status_code)
+#         else:
+#             flask.abort(415)
+#     else:
+#         logging.warning(f'Attempted db-add-edit request failed because authentication failed.')
+#         flask.abort(403)
 
 @server.route('/db-del/<collection>', methods=['POST'])
 def db_del(collection):
@@ -293,6 +248,7 @@ def db_edit_row(collection):
     if auth_ctl.auth_ctl(flask.request):
         if flask.request.content_type == 'application/json':
             data = flask.request.get_json()
+            validate_data(collection, data)
             status_code, text = db.edit_row(collection, data)
             return flask.Response(text, status=status_code)
         else:

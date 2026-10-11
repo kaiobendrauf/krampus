@@ -11,3 +11,5 @@ pg.yml
 docker-compose.yml
 ms.yml
 test1.yaml
+fs.yml
+firestore.json
