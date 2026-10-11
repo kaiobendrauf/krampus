@@ -20,7 +20,7 @@ def send_events(data: list):
         publish_future.add_done_callback(get_callback(publish_future, event))
         publish_futures.append(publish_future)
 
-	# Wait for all the publish futures to resolve before exiting.
+    # Wait for all the publish futures to resolve before exiting.
     futures.wait(publish_futures, return_when=futures.ALL_COMPLETED)
 
     print(f'Published messages with error handler to {topic_path}.')
@@ -28,7 +28,7 @@ def send_events(data: list):
 
 def setup(_):
     logging.debug("Running pubsub setup")
-	# Sets up the Pub/Sub connection, checking that environmental variables 'PUB_SUB_PROJ_ID' 'PUB_SUB_TOPIC_ID' and are found
+    # Sets up the Pub/Sub connection, checking that environmental variables 'PUB_SUB_PROJ_ID' 'PUB_SUB_TOPIC_ID' and are found
     project_id = os.environ.get('PUB_SUB_PROJ_ID')
     topic_id = os.environ.get('PUB_SUB_TOPIC_ID')
     global_project_id = os.environ.get('GCP_PROJ_ID')

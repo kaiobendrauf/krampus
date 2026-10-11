@@ -79,13 +79,13 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
     docs = lookup(collection, data)
     if len(docs) == 0:
         return 404, f'Data was not found in {collection} so could not be deleted.'
-    if len(rows) == 1:
-        delete_doc_by_id(collection, rows[0]['row_id'])
+    if len(docs) == 1:
+        delete_doc_by_id(collection, docs[0]['row_id'])
         return 200, f'Match found and deleted from {collection}.'
     if multiple:
-        for row in rows:
-            delete_doc_by_id(collection, row['row_id'])
-        return 200, f'Multiple ({len(rows)}) matches found in {collection}, all deleted.'
+        for doc in docs:
+            delete_doc_by_id(collection, doc['row_id'])
+        return 200, f'Multiple ({len(docs)}) matches found in {collection}, all deleted.'
     else:
         return 400, f'Included data has more than one match in {collection}. Please check database and request manually.'
 
@@ -111,7 +111,7 @@ def edit_fields(collection: str, data: dict) -> tuple[int, str]:
     
     row = lookup_by_id(collection, data['row_id'])
     if row:
-        db.collection(collection).document(str(row_id)).update(data)
+        db.collection(collection).document(str(data['row_id'])).update(data)
         logging.debug(f'Edited fields of {data['row_id']} in {collection}')
         return 200, f'Fields in row {data["row_id"]} edited in {collection}.'
     else:
@@ -139,7 +139,7 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
     row = lookup_by_id(collection, data['row_id'])
     if row:
         logging.debug(f'Edited entry {data['row_id']} in {collection}')
-        db.collection(collection).document(str(row_id)).set(data)
+        db.collection(collection).document(str(data['row_id'])).set(data)
         return 200, f'Entry {row["row_id"]} edited in {collection}'
     else:
         return 404, f'Row at row_id {data["row_id"]} not found in {collection}, so cannot be edited.'
@@ -147,9 +147,9 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
 
 def get_last_rule_delete() -> datetime:
     # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occured 
-    row = lookup_by_id('krampusinfo', 1)
-    if row:
-        return row['last_rule_delete']
+    doc = lookup_by_id('krampusinfo', 1)
+    if doc:
+        return doc['last_rule_delete']
 
 
 def lookup(collection: str, data: dict) -> list:
@@ -168,7 +168,7 @@ def lookup(collection: str, data: dict) -> list:
         # Create a query against the collection
         query = query.where(filter=firestore.FieldFilter(key, '==', data[key]))
     docs = query.stream()
-    return [doc.to_dict() for doc in result]
+    return [doc.to_dict() for doc in docs]
 
 
 def lookup_by_id(collection: str, row_id) -> dict:
@@ -198,8 +198,9 @@ def lookup_hostconfig_by_target(target: str) -> list:
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data
     '''
-    docs = db.collection(collection).where(filter=firestore.FieldFilter(target, 'in', 'targets'))
-    return [doc.to_dict() for doc in result]
+    query = db.collection('hostconfigs').where(filter=firestore.FieldFilter('targets', 'in', target))
+    docs = query.stream()
+    return [doc.to_dict() for doc in docs]
 
 
 def read(collection: str, limit: int, cursor = None) -> dict:
@@ -221,9 +222,9 @@ def read(collection: str, limit: int, cursor = None) -> dict:
         docs = [doc.pop('server_last_edit_date') for doc in docs]
     if len(docs) > limit:
         docs.pop()
-        return {'data': rows, 'cursor': rows[-1]['row_id']}
+        return {'data': docs, 'cursor': docs[-1]['row_id']}
     else:
-        return {'data': rows}
+        return {'data': docs}
 
 
 def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
@@ -239,10 +240,10 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
         dict: dict containing list of rules (key='rules') and optionally a cursor (key='cursor') if there is more data to read
     '''
     if cursor:
-        cursor_doc = get_doc_by_id(collection, cursor)
-        docs = db.collection(collection).start_after(cursor_doc).limit(limit+1).where(filter=firestore.FieldFilter('server_last_edit_date', '>', date)).stream()
+        cursor_doc = lookup_by_id('rules', cursor)
+        docs = db.collection('rules').start_after(cursor_doc).limit(limit+1).where(filter=firestore.FieldFilter('server_last_edit_date', '>', date)).stream()
     else:
-        docs = db.collection(collection).start_after(cursor_doc).limit(limit+1).where(filter=firestore.FieldFilter('server_last_edit_date', '>', date)).stream()
+        docs = db.collection('rules').limit(limit+1).where(filter=firestore.FieldFilter('server_last_edit_date', '>', date)).stream()
     
     docs = [doc.to_dict() for doc in docs]
 
@@ -253,7 +254,7 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
         docs.pop()
         return {'data': docs, 'cursor': docs[-1]['row_id']}
     else:
-        return {'data': rows}
+        return {'data': docs}
 
 # --------------------------------------------------------------------------------
 #                                Helper Functions
@@ -266,7 +267,7 @@ def delete_doc_by_id(collection, row_id):
 def get_all_docs(collection, limit=None, cursor=None):
     if limit:
         if cursor:
-            cursor_doc = get_doc_by_id(collection, cursor)
+            cursor_doc = lookup_by_id(collection, cursor)
             query = db.collection(collection).start_after(cursor_doc).limit(limit)
         else:
             query = db.collection(collection).limit(limit)

@@ -22,16 +22,16 @@ def server_req(url, data, accepted_errors=[], fail_on_errors=[]):
             return req_result
         elif req_result.status_code in accepted_errors:
             logging.warning(req_result.text)
-            logging.debug(row)
+            logging.debug(data)
             return req_result
         elif req_result.status_code in fail_on_errors:
             logging.error(f'Error {req_result.status_code}. {req_result.text}')
-            logging.debug(row)
+            logging.debug(data)
             logging.error(f'Cannot continue.')
             sys.exit(1)
         else:
             logging.error(f'Error {req_result.status_code}. {req_result.text}')
-            logging.debug(row)
+            logging.debug(data)
     logging.error(f'Cannot continue.')
     sys.exit(1)
 

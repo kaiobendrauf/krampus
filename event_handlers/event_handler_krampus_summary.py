@@ -1,6 +1,10 @@
 # --------------------------------------------------------------------------------
 #                                Required Functions
 # --------------------------------------------------------------------------------
+import logging
+import sys
+
+
 def send_events(data: list):
     for event in data:
         decision = event['decision']
