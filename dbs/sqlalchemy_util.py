@@ -87,6 +87,28 @@ class UserGroups(Base):
 #     id: Mapped[int] = mapped_column(primary_key=True)
 #     file_sha256:
 
+class EventSummary(Base):
+    __tablename__ = 'eventssummary'
+
+    row_id: Mapped[int] = mapped_column(primary_key=True)
+    file_name: Mapped[str] = mapped_column(String(255))
+    DECISION_UNKNOWN: Mapped[int] = mapped_column(Integer, nullable=True)
+    ALLOW_UNKNOWN: Mapped[int] = mapped_column(Integer, nullable=True)
+    ALLOW_BINARY: Mapped[int] = mapped_column(Integer, nullable=True)
+    ALLOW_CERTIFICATE: Mapped[int] = mapped_column(Integer, nullable=True)
+    ALLOW_SCOPE: Mapped[int] = mapped_column(Integer, nullable=True)
+    ALLOW_TEAMID: Mapped[int] = mapped_column(Integer, nullable=True)
+    ALLOW_SIGNINGID: Mapped[int] = mapped_column(Integer, nullable=True)
+    ALLOW_CDHASH: Mapped[int] = mapped_column(Integer, nullable=True)
+    BLOCK_UNKNOWN: Mapped[int] = mapped_column(Integer, nullable=True)
+    BLOCK_BINARY: Mapped[int] = mapped_column(Integer, nullable=True)
+    BLOCK_CERTIFICATE: Mapped[int] = mapped_column(Integer, nullable=True)
+    BLOCK_SCOPE: Mapped[int] = mapped_column(Integer, nullable=True)
+    BLOCK_TEAMID: Mapped[int] = mapped_column(Integer, nullable=True)
+    BLOCK_SIGNINGID: Mapped[int] = mapped_column(Integer, nullable=True)
+    BLOCK_CDHASH: Mapped[int] = mapped_column(Integer, nullable=True)
+    BUNDLE_BINARY: Mapped[int] = mapped_column(Integer, nullable=True)
+
 def setup_engine(connection_string, echo=True):
     engine = create_engine(connection_string)
 
@@ -121,6 +143,9 @@ def add(collection: str, data: dict) -> tuple[int, str]:
     '''
     if collection == 'rules':
         data['server_last_edit_date'] = datetime.now(timezone.utc)
+    if set(data.keys()).issubset({'targets', 'exclusions'}):
+        if collection == 'hostconfigs':
+            data['batch_size'] = None
     if 'row_id' in data:
         if lookup_by_id(collection, data['row_id']):
             return 409, f'Conflict: data with this id ({data["row_id"]}) already exists in {collection}. New data could not be added at this id.)'
@@ -178,11 +203,11 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
         return 404, f'Data was not found in {collection} so could not be deleted.'
     if len(rows) == 1:
         delete_row_by_id(collection, rows[0]['row_id'])
-        return 200, f'Match found and deleted from {collection}.'
+        return 200, f'Match found at row_id {rows[0]["row_id"]} and deleted from {collection}.'
     if multiple:
         for row in rows:
             delete_row_by_id(collection, row['row_id'])
-        return 200, f'Multiple ({len(rows)}) matches found in {collection}, all deleted.'
+        return 200, f'Multiple ({len(rows)}) matches found in {collection} at row_ids: {str([row["row_id"] for row in rows])[1, -1]}. All deleted.'
     else:
         return 400, f'Included data has more than one match in {collection}. Please check database and request manually.'
 
@@ -275,7 +300,7 @@ def lookup(collection: str, data: dict) -> list:
 
     with db.connect() as conn:
         rows = conn.execute(select(tbl).filter_by(**data))
-    results = [dict(row._mapping) for row in rows]
+    results = [remove_nulls_from_dict(dict(row._mapping)) for row in rows]
 
     if collection in ['rules', 'hostconfigs', 'machinestatus']:
         results = filter_matches_by_lists(collection, targets, groups, exclusions, results)
@@ -297,11 +322,11 @@ def lookup_by_id(collection: str, row_id: str) -> dict:
     '''
     tbl = get_table(collection)
     with db.connect() as conn:
-        data = conn.execute(select(tbl).where(tbl.c.row_id == row_id)).first()
-    if data:
+        row = conn.execute(select(tbl).where(tbl.c.row_id == row_id)).first()
+    if row:
         if collection in ['rules', 'hostconfigs', 'machinestatus']:
-            return add_lists(dict(data._mapping), collection)
-        return dict(data._mapping)
+            return add_lists(remove_nulls_from_dict(dict(row._mapping)), collection)
+        return remove_nulls_from_dict(dict(row._mapping))
 
 
 def lookup_hostconfig_by_target(target: str) -> list:
@@ -342,7 +367,8 @@ def read(collection: str, limit: int, cursor = None) -> dict:
 
     if collection == 'rules':
         # this data has server added fields that need to be removed
-        rows = [row.pop('server_last_edit_date') for row in rows]
+        for row in rows:
+            row.pop('server_last_edit_date')
     if len(rows) > limit:
         rows.pop()
         return {'data': rows, 'cursor': rows[-1]['row_id']}
@@ -369,12 +395,13 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
     else:
         with db.connect() as conn:
             rows = conn.execute(select(tbl).where(tbl.c.server_last_edit_date > date).order_by(tbl.c.row_id).limit(limit+1))
-    rows = [dict(row._mapping) for row in rows]
+    rows = [remove_nulls_from_dict(dict(row._mapping)) for row in rows]
 
     rows = [add_lists(row, 'rules') for row in rows]
 
     # this data has server added fields that need to be removed
-    rows =[row.pop('server_last_edit_date') for row in rows]
+    for row in rows:
+        row.pop('server_last_edit_date')
     
     if len(rows) > limit:
         rows.pop()
@@ -469,7 +496,15 @@ def get_all_rows(collection, limit=None, cursor=None):
     else:
         with db.connect() as conn:
             rows = conn.execute(select(tbl).order_by(tbl.c.row_id).limit(limit))
-    return [dict(row._mapping) for row in rows]
+    return [remove_nulls_from_dict(dict(row._mapping)) for row in rows]
+
+def remove_nulls_from_dict(d):
+    result = dict()
+    for k in d:
+        if not (d[k] is None):
+            result[k] = d[k]
+    return result
+
 
 def get_table(collection):
     return Table(collection, MetaData(), autoload_with=db)

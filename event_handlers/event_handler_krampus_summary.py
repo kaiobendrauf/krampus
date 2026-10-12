@@ -7,27 +7,42 @@ import sys
 
 def send_events(data: list):
     for event in data:
-        decision = event['decision']
-        summary = db.lookup_by_id('events_summary', event['file_name'])
-        if summary:
-            if decision in summary:
-                summary[decision] += 1
-            else:
-                summary[decision] = 1
-            db.edit('events_summary', summary, summary['file_name'])
+        if 'file_name' not in event:
+            logging.error('Event without file_name cannot be stored.')
+            logging.debug(event)
         else:
-            summary = dict()
-            summary['file_name'] = event['file_name']
-            summary[decision] = 1
-            db.add('events_summary', summary, summary['file_name'])
-    return None
+            name = event['file_name']
+            decision = event['decision']
+            rows = db.lookup('eventssummary', {'file_name': name})
+            if len(rows) == 0:
+                # add row
+                db.add('eventssummary', {'file_name': name, decision: 1})
+            elif len(rows) == 1:
+                row = rows[0]
+                # edit row
+                if decision in row and (not (row[decision] is None)):
+                    n = int(row[decision])
+                    db.edit_fields('eventssummary', {'row_id': row['row_id'], decision: n + 1})
+                else:
+                    db.edit_fields('eventssummary', {'row_id': row['row_id'], decision: 1})
+            else:
+                # error
+                logging.error('More than one eventssummary for {name}.')
+
+                row = rows[0]
+                logging.warning('Will update eventssummary for {name} at row_id {row["row_id"]}.')
+                if decision in row and (not (row[decision] is None)):
+                    n = int(row[decision])
+                    db.edit_fields('eventssummary', {'row_id': row['row_id'], decision: n + 1})
+                else:
+                    db.edit_fields('eventssummary', {'row_id': row['row_id'], decision: 1})
     
 def setup(data):
     # Sets up the database object
     global db
     db = data
 
-    if not db.is_event_handler:
+    if not db.is_summary_event_handler:
         logging.error('Krampus (summary) is chosen as the event handler but the chosen database is not set up for event handling.')
         sys.exit(1)
     

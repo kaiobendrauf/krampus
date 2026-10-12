@@ -72,9 +72,9 @@ def setup_db():
 
 def validate_data(collection, data):
     if collection == 'rules':
-        KrampusRule(data)
+        KrampusRule(**data)
     if collection == 'hostconfigs':
-        KrampusHostConfig(data)
+        KrampusHostConfig(**data)
 
 # ----------------------------------------
 #            Event Handler
@@ -86,12 +86,12 @@ def setup_event_handler():
         # pub sub event handler
         logging.info("Using Pub/Sub as the event handler.")
         import event_handlers.event_handler_pubsub as event_handler
-    elif os.environ.get('KRAMPUS_EVENT_HANDLER_FULL') and db.is_full_event_handler:
+    elif os.environ.get('KRAMPUS_EVENT_HANDLER_FULL'):
         # full events published to krampus' database
         logging.info("Using Krampus' database as the event handler, to store full events.")
         import event_handlers.event_handler_krampus_full as event_handler
         setup_data = db
-    elif os.environ.get('KRAMPUS_EVENT_HANDLER_SUMMARY')and db.is_summary_event_handler:
+    elif os.environ.get('KRAMPUS_EVENT_HANDLER_SUMMARY'):
         # summaries of events published to krampus' database
         logging.info("Using Krampus' database as the event handler, to store summarised events.")
         import event_handlers.event_handler_krampus_summary as event_handler
@@ -432,18 +432,18 @@ def is_target_exempt(db_data, machine_id, machine_data):
 
 def choose_sync_type(request, machine_status, hostconfig, new=False):
     if new or request.get('request_clean_sync') or (datetime.now(timezone.utc) > machine_status['clean_sync_by']) or (not has_clean_sync_since_delete(machine_status)):
-        if hostconfig and type(hostconfig) == dict and 'sync_type' in hostconfig and hostconfig['sync_type'] == 'clean_all':
-            machine_status['sync_type'] = 'clean_all'
-            hostconfig['sync_type'] = 'clean_all'
+        if hostconfig and type(hostconfig) == dict and 'sync_type' in hostconfig and hostconfig['sync_type'].lower() == 'clean_all':
+            machine_status['sync_type'] = 'CLEAN_ALL'
+            hostconfig['sync_type'] = 'CLEAN_ALL'
         else:
-            machine_status['sync_type'] = 'clean'
-            hostconfig['sync_type'] = 'clean'
+            machine_status['sync_type'] = 'CLEAN'
+            hostconfig['sync_type'] = 'CLEAN'
         # clean sync will now be required until completed
         machine_status['clean_sync_by'] = datetime.now(timezone.utc)
     elif hostconfig and type(hostconfig) == dict and 'sync_type' in hostconfig:
         machine_status['sync_type'] = hostconfig['sync_type']
     else:
-        machine_status['sync_type'] = 'normal'
+        machine_status['sync_type'] = 'NORMAL'
 
 def has_clean_sync_since_delete(machine_status):
     last_rule_delete = db.get_last_rule_delete()
@@ -481,7 +481,7 @@ def process_ruledownload(machine_id, machine_status, data):
     cursor = None
     if 'cursor' in data:
         cursor = data['cursor']
-    if machine_status['sync_type'] == 'clean' or machine_status['sync_type'] == 'clean_all' or ('last_check_in' not in machine_status):
+    if machine_status['sync_type'].lower() == 'clean' or machine_status['sync_type'].lower() == 'clean_all' or ('last_check_in' not in machine_status):
         logging.debug(f'Performing Clean sync for {machine_id}')
         result = db.read('rules', batch_size, cursor)
     else:
@@ -541,7 +541,7 @@ def process_postflight(machine_id, machine_status, data):
     db.edit_fields('machinestatus', machine_status)
 
 def process_postflight_sync_type(machine_id, machine_status, data):
-    if 'syncType' in data and (data['syncType'] == 'CLEAN' or data['syncType'] == 'CLEAN_ALL'):
+    if 'syncType' in data and (data['syncType'].lower() == 'clean' or data['syncType'].lower() == 'clean_all'):
         logging.debug(f'Clean sync for {machine_id} succesfull.')
         pick_future_clean_sync_by(machine_status)
         logging.debug(f'Updating clean_sync_by date for {machine_id} to {datetime.now(timezone.utc)}.')

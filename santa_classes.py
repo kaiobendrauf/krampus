@@ -282,7 +282,7 @@ class KrampusRule(Rule):
     server_last_edit_date: datetime = datetime.now(timezone.utc)
     targets: list[str] = None
     exclusions: list[str] = None
-    row_id = None
+    row_id: int = None
 
     def __post_init__(self):
         if ((not all(isinstance(i, (datetime, type(None))) for i in [self.server_last_edit_date])) or
@@ -297,7 +297,7 @@ class KrampusRule(Rule):
 class KrampusHostConfig(HostConfig):
     targets: list[str] = None
     exclusions: list[str] = None
-    row_id = None
+    row_id: int = None
 
     def __post_init__(self):
         if not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions]):

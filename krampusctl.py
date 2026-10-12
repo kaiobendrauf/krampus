@@ -81,7 +81,16 @@ def process_rep_response(req_res):
     sys.exit(1)
 
 def process_replicate_chunk(response_data, data, collection, del_url, edit_url):
-    # print(f'processing chunk. response data size {len(response_data)}, data size {len(data)}')
+    # sort data so that we find matches baserd on row_id first
+    id_data = []
+    no_id_data = []
+    for d in data:
+        if 'row_id' in data:
+            id_data.append(d)
+        else:
+            no_id_data.append(d)
+    data =  id_data + no_id_data
+
     new_data = data.copy()
     for i, d in enumerate(data):
         match, is_full_match = check_dict_to_database(response_data, d)
@@ -94,6 +103,7 @@ def process_replicate_chunk(response_data, data, collection, del_url, edit_url):
             if not is_full_match:
                 #  not full match needs to be edited, not added
                 server_req(edit_url, d, fail_on_errors=[404, 400])
+
     # old data with no matches needs to be deleted
     for d in response_data:
         server_req(del_url, d, fail_on_errors=[404, 400])
@@ -151,13 +161,13 @@ def delete(data, server_url):
     for collection in data:
         for row in data[collection]:
             success = False
-            req_result = server_req(f'{server_url}/db-del/{collection}', row, accepted_errors=[400, 404])
+            req_result = server_req(f'{server_url}/db-del/{collection}', row, fail_on_errors=[400], accepted_errors=[404])
 
 def delete_multiple(data, server_url):
     for collection in data:
         for row in data[collection]:
             success = False
-            req_result = server_req(f'{server_url}/db-del/{collection}', row, accepted_errors=[404])
+            req_result = server_req(f'{server_url}/db-del-multiple/{collection}', row, accepted_errors=[404])
 
 def check_hostconfigs(l):
     for row in l:
@@ -302,7 +312,7 @@ def process_args():
                         help='copy this data to the database')
     parser.add_argument('--add', dest='add_path',
                         help='add this data to the database, without creating duplicates')
-    parser.add_argument('--edit_row', dest='edit_row_path',
+    parser.add_argument('--edit_rows', dest='edit_row_path',
                         help='fully replace the data in the database at a specific id, with the assumption that it exists')
     parser.add_argument('--edit_fields', dest='edit_fields_path',
                         help='edits specifid fields in the data in the database at a specific row id, with the assumption that it exists')

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from google.cloud import firestore
 
-is_full_event_handler = True
+is_full_event_handler = False
 is_summary_event_handler = True
 
 
@@ -81,11 +81,11 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
         return 404, f'Data was not found in {collection} so could not be deleted.'
     if len(docs) == 1:
         delete_doc_by_id(collection, docs[0]['row_id'])
-        return 200, f'Match found and deleted from {collection}.'
+        return 200, f'Match found at row_id {docs[0]["row_id"]} and deleted from {collection}.'
     if multiple:
         for doc in docs:
             delete_doc_by_id(collection, doc['row_id'])
-        return 200, f'Multiple ({len(docs)}) matches found in {collection}, all deleted.'
+        return 200, f'Multiple ({len(docs)}) matches found in {collection} at row_ids: {str([doc["row_id"] for doc in docs])[1:-1]}. All deleted.'
     else:
         return 400, f'Included data has more than one match in {collection}. Please check database and request manually.'
 
@@ -168,7 +168,7 @@ def lookup(collection: str, data: dict) -> list:
         # Create a query against the collection
         query = query.where(filter=firestore.FieldFilter(key, '==', data[key]))
     docs = query.stream()
-    return [doc.to_dict() for doc in docs]
+    return [doc.to_dict() for doc in list(docs)]
 
 
 def lookup_by_id(collection: str, row_id) -> dict:
@@ -198,9 +198,9 @@ def lookup_hostconfig_by_target(target: str) -> list:
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data
     '''
-    query = db.collection('hostconfigs').where(filter=firestore.FieldFilter('targets', 'in', target))
+    query = db.collection('hostconfigs').where(filter=firestore.FieldFilter('targets', 'array_contains', target))
     docs = query.stream()
-    return [doc.to_dict() for doc in docs]
+    return [doc.to_dict() for doc in list(docs)]
 
 
 def read(collection: str, limit: int, cursor = None) -> dict:
@@ -219,7 +219,8 @@ def read(collection: str, limit: int, cursor = None) -> dict:
 
     if collection == 'rules':
         # this data has server added fields that need to be removed
-        docs = [doc.pop('server_last_edit_date') for doc in docs]
+        for doc in docs:
+            doc.pop('server_last_edit_date')
     if len(docs) > limit:
         docs.pop()
         return {'data': docs, 'cursor': docs[-1]['row_id']}
@@ -245,10 +246,10 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
     else:
         docs = db.collection('rules').limit(limit+1).where(filter=firestore.FieldFilter('server_last_edit_date', '>', date)).stream()
     
-    docs = [doc.to_dict() for doc in docs]
-
+    docs = [doc.to_dict() for doc in list(docs)]
     # this data has server added fields that need to be removed
-    docs = [doc.pop('server_last_edit_date') for doc in docs]
+    for doc in docs:
+        doc.pop('server_last_edit_date')
     
     if len(docs) > limit:
         docs.pop()
@@ -265,14 +266,15 @@ def delete_doc_by_id(collection, row_id):
     store_delete_time(collection)
 
 def get_all_docs(collection, limit=None, cursor=None):
+    query = db.collection(collection)
+    if cursor:
+        cursor_doc = lookup_by_id(collection, cursor)
+        query = query.start_after(cursor_doc)
     if limit:
-        if cursor:
-            cursor_doc = lookup_by_id(collection, cursor)
-            query = db.collection(collection).start_after(cursor_doc).limit(limit)
-        else:
-            query = db.collection(collection).limit(limit)
-        docs = query.stream()
-        return [doc.to_dict() for doc in docs]
+        query = query.limit(limit)
+    docs = query.stream()
+    return [doc.to_dict() for doc in list(docs)]
+
 
 def store_delete_time(collection):
     if collection == 'rules':
