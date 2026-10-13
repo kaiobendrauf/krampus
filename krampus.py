@@ -116,7 +116,7 @@ def preflight(machine_id):
         data = get_request_data(flask.request)
         result = process_preflight(machine_id, data)
         # logging.debug(f'preflight result:\n{result}')
-        return result
+        return flask.Response(json.dumps(result), mimetype='application/json')
     else:
         logging.warning(f'Attempted sync request (preflight) from {machine_id} failed because authentication failed.')
         flask.abort(403)
@@ -129,7 +129,7 @@ def eventupload(machine_id):
         if 'events' in data:
             result = event_handler.send_events(data['events'])
             if result:
-                return result
+                return flask.Response(json.dumps(result), mimetype='application/json')
             return flask.Response(status=200)
         else:
             flask.abort(400) 
@@ -146,7 +146,7 @@ def ruledownload(machine_id):
         if machine_status:
             result = process_ruledownload(machine_id, machine_status, data)
             # logging.debug(f'ruledownload result:\n{result}')
-            return result
+            return flask.Response(json.dumps(result), mimetype='application/json')
         else:
             logging.warning(f'Attempted sync request (ruledownload) from {machine_id} failed because machine status for sync could not be found.')
             flask.abort(404)
@@ -184,7 +184,7 @@ def db_add(collection):
             if collection in ['hostconfigs', 'rules'] and 'targets' not in data:
                 logging.warning(f'Data for {collection} missing targets, so will not ever be sent.')
             status_code, text = db.add(collection, data)
-            return flask.Response(text, status=status_code)
+            return flask.Response(text, status=status_code, content_type='text/plain')
         else:
             flask.abort(415)
     else:
@@ -212,7 +212,7 @@ def db_del(collection):
         if flask.request.content_type == 'application/json':
             data = flask.request.get_json()
             status_code, text = db.delete(collection, data)
-            return flask.Response(text, status=status_code)
+            return flask.Response(text, status=status_code, content_type='text/plain')
         else:
             flask.abort(415)
     else:
@@ -226,7 +226,7 @@ def db_del_multiple(collection):
         if flask.request.content_type == 'application/json':
             data = flask.request.get_json()
             status_code, text = db.delete(collection, data, True)
-            return flask.Response(text, status=status_code)
+            return flask.Response(text, status=status_code, content_type='text/plain')
         else:
             flask.abort(415)
     else:
@@ -241,7 +241,7 @@ def db_edit_row(collection):
             data = flask.request.get_json()
             validate_data(collection, data)
             status_code, text = db.edit_row(collection, data)
-            return flask.Response(text, status=status_code)
+            return flask.Response(text, status=status_code, content_type='text/plain')
         else:
             flask.abort(415)
     else:
@@ -255,7 +255,7 @@ def db_edit_fields(collection):
         if flask.request.content_type == 'application/json':
             data = flask.request.get_json()
             status_code, text = db.edit_fields(collection, data)
-            return flask.Response(text, status=status_code)
+            return flask.Response(text, status=status_code, content_type='text/plain')
         else:
             flask.abort(415)
     else:
@@ -273,7 +273,7 @@ def db_read(collection):
                     result = db.read(collection, data['limit'], data['cursor'])
                 else:
                     result = db.read(collection, data['limit'])
-                return result
+                return flask.Response(str(result), mimetype='application/json')
             else:
                 flask.abort(400)
         else:
@@ -485,7 +485,7 @@ def process_ruledownload(machine_id, machine_status, data):
     return result
 
 def check_if_targets_machine(targets, machine_id, machine_status):
-    if targets:
+    if targets is not None:
         if 'all' in targets or machine_id in targets:
             return True
         if 'primary_user' in machine_status:

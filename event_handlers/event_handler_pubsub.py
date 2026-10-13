@@ -1,3 +1,4 @@
+import json
 from concurrent import futures
 from google.cloud import pubsub_v1
 import logging
@@ -13,7 +14,7 @@ publisher = pubsub_v1.PublisherClient()
 def send_events(data: list):
     publish_futures = []
     for event in data:
-        event = str(event)
+        event = json.dumps(event)
         # When you publish a message, the client returns a future.
         publish_future = publisher.publish(topic_path, event.encode('utf-8'))
         # Non-blocking. Publish failures are handled in the callback function.
