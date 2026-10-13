@@ -147,7 +147,7 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
 
 def get_last_rule_delete() -> datetime:
     # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occured 
-    doc = lookup_by_id('krampusinfo', 1)
+    doc = lookup_by_id('krampusinfo', '1')
     if doc:
         return doc['last_rule_delete']
 
@@ -241,7 +241,7 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
         dict: dict containing list of rules (key='rules') and optionally a cursor (key='cursor') if there is more data to read
     '''
     if cursor:
-        cursor_doc = lookup_by_id('rules', cursor)
+        cursor_doc = db.collection(collection).document(str(row_id)).get()
         docs = db.collection('rules').start_after(cursor_doc).limit(limit+1).where(filter=firestore.FieldFilter('server_last_edit_date', '>', date)).stream()
     else:
         docs = db.collection('rules').limit(limit+1).where(filter=firestore.FieldFilter('server_last_edit_date', '>', date)).stream()
@@ -268,7 +268,7 @@ def delete_doc_by_id(collection, row_id):
 def get_all_docs(collection, limit=None, cursor=None):
     query = db.collection(collection)
     if cursor:
-        cursor_doc = lookup_by_id(collection, cursor)
+        cursor_doc = db.collection(collection).document(str(row_id)).get()
         query = query.start_after(cursor_doc)
     if limit:
         query = query.limit(limit)

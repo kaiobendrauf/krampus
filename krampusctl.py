@@ -169,15 +169,24 @@ def delete_multiple(data, server_url):
             success = False
             req_result = server_req(f'{server_url}/db-del-multiple/{collection}', row, accepted_errors=[404])
 
-def check_hostconfigs(l):
+def check_hostconfigs(l, allow_partial=False):
     for row in l:
         KrampusHostConfig(**row)
         if 'targets' not in row:
             row['targets'] = ['all']
     
-def check_rules(l):
+def check_rules(l, allow_partial=False):
     for row in l:
-        KrampusRule(**row)
+        if allow_partial:
+            allowed_keys = {'identifier', 'policy', 'rule_type', 'custom_msg', 'custom_url', 'notification_app_name', 'cel_expr', 'row_id', 'targets', 'exemptions'}
+            rule_keys = set(row.keys())
+            if not rule_keys.issubset(allowed_keys):
+                logging.error(f'Rule has unknown key(s) {rule_keys.difference(allowed_keys)}.')
+                logging.error(f'Possible keys: {allowed_keys}')
+                logging.error(f'Rule: {row}')
+                sys.exit(1)
+        else:
+            KrampusRule(**row)
         if 'targets' not in row:
             row['targets'] = ['all']
         # # check for keys
@@ -224,10 +233,10 @@ def write_yaml(yaml_file, server_url, limit):
 # ----------------------------------------
 #                 File reader
 # ----------------------------------------
-def read_input_file(path, check_santa_validtiy):
+def read_input_file(path, allow_partial):
     check_path_exists(path)
     if path.endswith('.yaml') or path.endswith('.yml'):
-        return process_yaml(path, check_santa_validtiy)
+        return process_yaml(path, allow_partial)
     else:
         logging.error(f'File {path} is not a type of file this script is able to process. Please provide a yaml file.')
         sys.exit(1)
@@ -245,9 +254,9 @@ def check_path_exists(path, should_exit=True):
 # ----------------------------------------
 #                 yaml
 # ----------------------------------------
-def process_yaml(file_path, check_santa_validtiy) -> dict:
+def process_yaml(file_path, allow_partial) -> dict:
     result = read_yaml(file_path)
-    check_valid_yaml_dict(result, check_santa_validtiy)
+    check_valid_yaml_dict(result, allow_partial)
     return result
 
 def read_yaml(file_path) -> dict:
@@ -266,18 +275,16 @@ def read_yaml(file_path) -> dict:
             logging.error(e, exc_info=True)
             sys.exit(1)
 
-def check_valid_yaml_dict(data, check_santa_validtiy):
+def check_valid_yaml_dict(data, allow_partial):
     if type(data) != dict:
         logging.error(f'yaml data must be in the form of a dictionary with the top level key being the collection name. This data is of type {type(data)}.')
         sys.exit(1)
     for collection in data:
         collection_data = data[collection]
         if collection == 'rules': 
-            if check_santa_validtiy:
-                check_rules(collection_data)
+            check_rules(collection_data, allow_partial)
         elif collection == 'hostconfigs':
-            if check_santa_validtiy:
-                check_hostconfigs(collection_data)
+            check_hostconfigs(collection_data, )
         else:
             logging.error(f'Only "rules" and "hostconfigs" are valid collections. The top level key {collection} is not recognised.')
             sys.exit(1)
@@ -341,22 +348,22 @@ def main():
         sys.exit(1)
 
     if rep_path:
-        data = read_input_file(rep_path, True)
+        data = read_input_file(rep_path, False)
         replicate(data, server_url, limit)
     if add_path:
-        data = read_input_file(add_path, True)
+        data = read_input_file(add_path, False)
         add(data, server_url)
     if edit_row_path:
-        data = read_input_file(edit_row_path, True)
+        data = read_input_file(edit_row_path, False)
         edit_row(data, server_url)
     if edit_fields_path:
-        data = read_input_file(edit_fields_path, False)
+        data = read_input_file(edit_fields_path, True)
         edit_fields(data, server_url)
     if del_path:
-        data = read_input_file(del_path, False)
+        data = read_input_file(del_path, True)
         delete(data, server_url)
     if del_path_m:
-        data = read_input_file(del_path_m, False)
+        data = read_input_file(del_path_m, True)
         delete_multiple(data, server_url)
     if output:
         write_yaml(output, server_url, limit)

@@ -181,6 +181,8 @@ def db_add(collection):
         if flask.request.content_type == 'application/json':
             data = flask.request.get_json()
             validate_data(collection, data)
+            if collection in ['hostconfigs', 'rules'] and 'targets' not in data:
+                logging.warning(f'Data for {collection} missing targets, so will not ever be sent.')
             status_code, text = db.add(collection, data)
             return flask.Response(text, status=status_code)
         else:
@@ -522,7 +524,7 @@ def process_postflight(machine_id, machine_status, data):
     db.edit_fields('machinestatus', machine_status)
 
 def process_postflight_sync_type(machine_id, machine_status, data):
-    if 'syncType' in data and (data['syncType'].lower() == 'clean' or data['syncType'].lower() == 'clean_all'):
+    if ('syncType' in data and (data['syncType'].lower() == 'clean' or data['syncType'].lower() == 'clean_all')) or ('sync_type' in data and (data['sync_type'].lower() == 'clean' or data['sync_type'].lower() == 'clean_all')):
         logging.debug(f'Clean sync for {machine_id} succesfull.')
         pick_future_clean_sync_by(machine_status)
         logging.debug(f'Updating clean_sync_by date for {machine_id} to {datetime.now(timezone.utc)}.')

@@ -258,15 +258,13 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
     '''
     if 'row_id' not in data:
         return 400,  f'Row provided does not contain a row_id, unkown which row to edit.'
-    if collection == 'rules':
-            data['server_last_edit_date'] = datetime.now(timezone.utc)
-    row = lookup_by_id(collection, data['row_id'])
-    if row:
-        delete_row_by_id(collection, data['row_id'])
-        add(collection, data)
-        return 200, f'Entry {row["row_id"]} edited in {collection}'
-    else:
-        return 404, f'Row at row_id {data["row_id"]} not found in {collection}, so cannot be edited.'
+    table = get_table(collection)
+    keys = [column.key for column in table.c]
+    for key in keys:
+        if key not in data:
+            data[key] = None
+    delete('lists', {'linked_table': collection, 'linked_id': data['row_id']}, True)
+    return edit_fields(collection, data)
 
 def get_last_rule_delete() -> datetime:
     # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occured 
