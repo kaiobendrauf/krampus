@@ -116,7 +116,7 @@ def preflight(machine_id):
         data = get_request_data(flask.request)
         result = process_preflight(machine_id, data)
         # logging.debug(f'preflight result:\n{result}')
-        return flask.Response(str(result), mimetype='application/json')
+        return flask.Response(json.dumps(result), mimetype='application/json')
     else:
         logging.warning(f'Attempted sync request (preflight) from {machine_id} failed because authentication failed.')
         flask.abort(403)
@@ -129,7 +129,7 @@ def eventupload(machine_id):
         if 'events' in data:
             result = event_handler.send_events(data['events'])
             if result:
-                return flask.Response(str(result), mimetype='application/json')
+                return flask.Response(json.dumps(result), mimetype='application/json')
             return flask.Response(status=200)
         else:
             flask.abort(400) 
@@ -146,7 +146,7 @@ def ruledownload(machine_id):
         if machine_status:
             result = process_ruledownload(machine_id, machine_status, data)
             # logging.debug(f'ruledownload result:\n{result}')
-            return flask.Response(str(result), mimetype='application/json')
+            return flask.Response(json.dumps(result), mimetype='application/json')
         else:
             logging.warning(f'Attempted sync request (ruledownload) from {machine_id} failed because machine status for sync could not be found.')
             flask.abort(404)
@@ -483,7 +483,7 @@ def process_ruledownload(machine_id, machine_status, data):
     return result
 
 def check_if_targets_machine(targets, machine_id, machine_status):
-    if targets:
+    if targets is not None:
         if 'all' in targets or machine_id in targets:
             return True
         if 'primary_user' in machine_status:

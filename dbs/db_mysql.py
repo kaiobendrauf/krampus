@@ -43,6 +43,7 @@ def setup():
 
     connection_string = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
     sqlalchemy_util.setup_engine(connection_string)
+    sqlalchemy_util.setup()
 
 
 def add(collection: str, data: dict) -> tuple[int, str]:
@@ -59,7 +60,7 @@ def add(collection: str, data: dict) -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    sqlalchemy_util.add(collection, data)
+    return sqlalchemy_util.add(collection, data)
 
 
 def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]:
@@ -76,7 +77,7 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    sqlalchemy_util.delete(collection, data, multiple)
+    return sqlalchemy_util.delete(collection, data, multiple)
 
 
 def edit_fields(collection: str, data: dict) -> tuple[int, str]:
@@ -93,7 +94,7 @@ def edit_fields(collection: str, data: dict) -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    sqlalchemy_util.edit_fields(collection, data)
+    return sqlalchemy_util.edit_fields(collection, data)
 
 
 def edit_row(collection: str, data: dict) -> tuple[int, str]:
@@ -110,12 +111,12 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    sqlalchemy_util.edit_row(collection, data)
+    return sqlalchemy_util.edit_row(collection, data)
 
 
 def get_last_rule_delete() -> datetime:
     # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occured 
-    sqlalchemy_util.get_last_rule_delete() 
+    return sqlalchemy_util.get_last_rule_delete()
 
 
 def lookup(collection: str, data: dict) -> list:
@@ -129,7 +130,7 @@ def lookup(collection: str, data: dict) -> list:
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data
     '''
-    sqlalchemy_util.lookup(collection, data) 
+    return sqlalchemy_util.lookup(collection, data)
 
 
 def lookup_by_id(collection: str, row_id: str) -> dict:
@@ -144,7 +145,7 @@ def lookup_by_id(collection: str, row_id: str) -> dict:
         dict: dict containing data at the given row id
               returns None if no such row is found
     '''
-    sqlalchemy_util.lookup_by_id(collection, row_id) 
+    return sqlalchemy_util.lookup_by_id(collection, row_id)
 
 
 def lookup_hostconfig_by_target(target: str) -> list:
@@ -157,7 +158,7 @@ def lookup_hostconfig_by_target(target: str) -> list:
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data
     '''
-    sqlalchemy_util.lookup_hostconfig_by_target(target)
+    return sqlalchemy_util.lookup_hostconfig_by_target(target)
 
 
 def read(collection: str, limit: int, cursor = None) -> dict:
@@ -172,7 +173,7 @@ def read(collection: str, limit: int, cursor = None) -> dict:
     Returns:
         dict: dict containing list of data (key="data") and optionally a cursor (key="cursor") if there is more data to read
     '''
-    sqlalchemy_util.read(collection, limit, cursor)
+    return sqlalchemy_util.read(collection, limit, cursor)
 
 
 def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
@@ -187,5 +188,5 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
     Returns:
         dict: dict containing list of rules (key='rules') and optionally a cursor (key='cursor') if there is more data to read
     '''
-    sqlalchemy_util.read_new_rules(date, limit, cursor)
+    return sqlalchemy_util.read_new_rules(date, limit, cursor)
 
