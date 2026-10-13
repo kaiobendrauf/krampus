@@ -273,7 +273,7 @@ def db_read(collection):
                     result = db.read(collection, data['limit'], data['cursor'])
                 else:
                     result = db.read(collection, data['limit'])
-                return flask.Response(str(result), mimetype='application/json')
+                return flask.Response(json.dumps(result), mimetype='application/json')
             else:
                 flask.abort(400)
         else:
