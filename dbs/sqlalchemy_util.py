@@ -6,8 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy import delete as sqldelete
 from sqlalchemy import Boolean, create_engine, DateTime, insert, Integer, MetaData, select, String, Table, text, update
 from sqlalchemy.dialects.mysql import VARCHAR
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session
-from sqlalchemy.testing.schema import mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 db = None
 '''
