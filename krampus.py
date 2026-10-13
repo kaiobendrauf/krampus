@@ -55,7 +55,6 @@ def setup_ctl_auth():
 # ----------------------------------------
 def setup_db():
     global db
-    # print(os.environ)
     if os.environ.get('GCP_PROJ_ID'):
         # firestore database
         import dbs.db_firestore as db
@@ -326,7 +325,7 @@ def process_preflight(machine_id, data):
     # machine_status = data to be stored for other requests
     machine_status = get_machine_status(machine_id)
     new = False
-    if not machine_status:
+    if machine_status is None:
         machine_status = {'machine_id': machine_id}
         new = True
     choose_sync_type(data, machine_status, hostconfig, new)
@@ -360,29 +359,21 @@ def get_machine_status(machine_id):
 
 def get_hostconfig(machine_id, data):
     # lookup hostconfigs for machine_id
-    result = hostconfig_check_target(machine_id, machine_id, data, 'machine_id')
-    if result:
-        return result
-    # lookup hostconfig for user
-    if 'primary_user' in data:
-        result = hostconfig_check_target(data['primary_user'], machine_id, data, 'machine_id')
-        if result:
+    l = [(machine_id, 'machine_id')]
+    for k in ['primary_user', 'primary_user_groups']:
+        if k in data:
+            l.append((data[k], k))
+    l.append(('all', 'all machines'))
+    for target, s in l:
+        result = hostconfig_check_target(target, machine_id, data, s)
+        if result is not None:
             return result
-    # for groups
-    if 'primary_user_groups' in data:
-        result = hostconfig_check_target(data['primary_user_groups'], machine_id, data, 'primary_user_groups')
-        if result:
-            return result
-    #look up all hostconfigs for all
-    result = hostconfig_check_target('all', machine_id, data, 'all machines')
-    if result:
-        return result
     return dict()
 
 def hostconfig_remove_krampus_data_hostconfig(hostconfig):
     hostconfig.pop('row_id', None)
     hostconfig.pop('targets', None)
-    hostconfig.pop('exemptions', None)
+    hostconfig.pop('exclusions', None)
     return hostconfig
 
 def hostconfig_check_target(target, machine_id, machine_data, s):
@@ -392,31 +383,31 @@ def hostconfig_check_target(target, machine_id, machine_data, s):
         for el in target:
             hostconfigs = db.lookup_hostconfig_by_target(el)
             for hostconfig in hostconfigs:
-                if not is_target_exempt(hostconfig, machine_id, machine_data):
+                if not is_target_excluded(hostconfig, machine_id, machine_data):
                     results.append(hostconfig)
                     result_ids.add(hostconfig['row_id'])
     else:
         hostconfigs = db.lookup_hostconfig_by_target(target)
         for hostconfig in hostconfigs:
-            if not is_target_exempt(hostconfig, machine_id, machine_data):
+            if not is_target_excluded(hostconfig, machine_id, machine_data):
                 results.append(hostconfig)
                 result_ids.add(hostconfig['row_id'])
     if len(result_ids) == 1:
         return hostconfig_remove_krampus_data_hostconfig(results[0])
     if len(result_ids) > 1:
-        logging.warning(f'Conflicting hostconfigs found for {machine_id}, when looking at hostconfigs that target {s}. Hostconfigs with the following ids apply:\n{result_ids}')
+        logging.warning(f'Conflicting hostconfigs found for {machine_id}, when looking at hostconfigs that target {s}. Hostconfigs with the following ids apply: {result_ids}')
         return hostconfig_remove_krampus_data_hostconfig(results[0])
 
-def is_target_exempt(db_data, machine_id, machine_data):
-    if 'exemptions' in db_data:
-        if machine_id in db_data['exemptions']:
+def is_target_excluded(db_data, machine_id, machine_data):
+    if 'exclusions' in db_data:
+        if machine_id in db_data['exclusions']:
             return True 
         if 'primary_user' in machine_data:
-            if machine_data['primary_user'] in db_data['exemptions']:
+            if machine_data['primary_user'] in db_data['exclusions']:
                 return True
         if 'primary_user_groups' in machine_data:
             for group in machine_data['primary_user_groups']:
-                if group in db_data['exemptions']:
+                if group in db_data['exclusions']:
                     return True
     return False
 

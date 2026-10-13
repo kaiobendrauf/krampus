@@ -148,11 +148,7 @@ def add(collection: str, data: dict) -> tuple[int, str]:
     if 'row_id' in data:
         if lookup_by_id(collection, data['row_id']):
             return 409, f'Conflict: data with this id ({data["row_id"]}) already exists in {collection}. New data could not be added at this id.)'
-    lists = {
-        'targets': data.pop('targets', None), 
-        'exclusions': data.pop('exclusions', None), 
-        'groups': data.pop('primary_user_groups', None), 
-        'remount_usb_mode': data.pop('remount_usb_mode', None)}
+    lists = create_list_dict(data)
 
     with db.connect() as conn:
         result = conn.execute(insert(get_table(collection)).values(**data))
@@ -208,7 +204,7 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
     if multiple:
         for row in rows:
             delete_row_by_id(collection, row['row_id'])
-        return 200, f'Multiple ({len(rows)}) matches found in {collection} at row_ids: {str([row["row_id"] for row in rows])[1, -1]}. All deleted.'
+        return 200, f'Multiple ({len(rows)}) matches found in {collection} at row_ids: {str([row["row_id"] for row in rows])[1:-1]}. All deleted.'
     else:
         return 400, f'Included data has more than one match in {collection}. Please check database and request manually.'
 
@@ -231,12 +227,7 @@ def edit_fields(collection: str, data: dict) -> tuple[int, str]:
         return 400,  f'Row provided does not contain a row_id, unkown which row to edit.'
     if collection == 'rules':
         data['server_last_edit_date'] = datetime.now(timezone.utc)
-    
-    lists = {
-        'targets': data.pop('targets', None), 
-        'exclusions': data.pop('exclusions', None), 
-        'groups': data.pop('primary_user_groups', None), 
-        'remount_usb_mode': data.pop('remount_usb_mode', None)}
+    lists = create_list_dict(data)
     
     row = lookup_by_id(collection, data['row_id'])
     if row:
@@ -297,20 +288,16 @@ def lookup(collection: str, data: dict) -> list:
     '''
     tbl = get_table(collection)
 
-    lists = {
-        'targets': data.pop('targets', None), 
-        'exclusions': data.pop('exclusions', None), 
-        'groups': data.pop('primary_user_groups', None), 
-        'remount_usb_mode': data.pop('remount_usb_mode', None)}
+    lists = create_list_dict(data)
 
     with db.connect() as conn:
         rows = conn.execute(select(tbl).filter_by(**data))
-    results = [remove_nulls_from_dict(dict(row._mapping)) for row in rows]
+    rows = [remove_nulls_from_dict(dict(row._mapping)) for row in rows]
 
     if collection in ['rules', 'hostconfigs', 'machinestatus']:
-        results = filter_matches_by_lists(collection, lists, results)
+        rows = filter_matches_by_lists(collection, lists, rows)
 
-    return results
+    return rows
 
 
 def lookup_by_id(collection: str, row_id: str) -> dict:
@@ -444,6 +431,13 @@ def add_to_lists_database(collection, linked_id, lists, delete_old=False):
             else:
                 logging.error(f'{lists[key]} should be a list of strings, instead it is a {type(lists[key])}. Cannot add to lists database.')
 
+def create_list_dict(data):
+    result = dict()
+    for key in ['targets', 'exclusions', 'primary_user_groups', 'remount_usb_mode']:
+        if key in data:
+            result[key] = data.pop(key)
+    return result
+
 def delete_row_by_id(collection, i):
     tbl = get_table(collection)
     with db.connect() as conn:
@@ -456,20 +450,20 @@ def delete_row_by_id(collection, i):
 
 def filter_matches_by_lists(collection, lists, matches):
     if collection in ['rules', 'hostconfigs', 'machinestatus']:
-        old_results = [add_lists(collection, row) for row in matches]
-        results = []
-        for result in old_results:
+        results = [add_lists(collection, row) for row in matches]
+        matches = []
+        for result in results:
             is_match = True
             for key in lists:
                 val = lists[key]
                 if val is None:
-                    if key in result:
+                    if key in result and result[key] is not None:
                         is_match = False
                 elif (not (key in result)) or (set(result[key]) != set(val)):
                     is_match = False   
             if is_match:
-                results.append(result)
-    return results
+                matches.append(result)
+    return matches
 
 def get_all_rows(collection, limit=None, cursor=None):
     tbl = get_table(collection)
@@ -487,7 +481,6 @@ def remove_nulls_from_dict(d):
         if not (d[k] is None):
             result[k] = d[k]
     return result
-
 
 def get_table(collection):
     return Table(collection, MetaData(), autoload_with=db)
