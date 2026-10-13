@@ -279,14 +279,12 @@ class Rule():
 
 @dataclass
 class KrampusRule(Rule):
-    server_last_edit_date: datetime = datetime.now(timezone.utc)
     targets: list[str] = None
     exclusions: list[str] = None
     row_id: int = None
 
     def __post_init__(self):
-        if ((not all(isinstance(i, (datetime, type(None))) for i in [self.server_last_edit_date])) or
-            (not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions]))):
+        if ((not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions]))):
             raise Exception("Could not init KrampusRule, wrong data type given.")
 
         if not self.targets:

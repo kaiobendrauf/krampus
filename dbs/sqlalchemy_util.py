@@ -30,14 +30,14 @@ class Rule(Base):
     rule_type: Mapped[str] = mapped_column(String(255))
     server_last_edit_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
-class Targets(Base):
-    __tablename__ = 'targets'
+class Lists(Base):
+    __tablename__ = 'lists'
 
     row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    table: Mapped[str] = mapped_column(String(255))
+    linked_table: Mapped[str] = mapped_column(String(255))
     linked_id: Mapped[int] = mapped_column(Integer)
-    target: Mapped[str] = mapped_column(String(255))
-    include: Mapped[bool] = mapped_column(Boolean)
+    key: Mapped[str] = mapped_column(String(255))
+    value: Mapped[str] = mapped_column(String(255))
 
 class HostClass(Base):
     __tablename__ = 'hostconfigs'
@@ -74,12 +74,12 @@ class MachineStatus(Base):
     clean_sync_by: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class UserGroups(Base):
-    __tablename__ = 'usergroups'
+# class UserGroups(Base):
+#     __tablename__ = 'usergroups'
 
-    row_id: Mapped[int] = mapped_column(primary_key=True)
-    linked_id: Mapped[int] = mapped_column(Integer)
-    group: Mapped[str] = mapped_column(String(255))
+#     row_id: Mapped[int] = mapped_column(primary_key=True)
+#     linked_id: Mapped[int] = mapped_column(Integer)
+#     group: Mapped[str] = mapped_column(String(255))
 
 
 # class Event(Base):
@@ -143,22 +143,23 @@ def add(collection: str, data: dict) -> tuple[int, str]:
     '''
     if collection == 'rules':
         data['server_last_edit_date'] = datetime.now(timezone.utc)
-    if set(data.keys()).issubset({'targets', 'exclusions'}):
-        if collection == 'hostconfigs':
+    if collection == 'hostconfigs' and set(data.keys()).issubset({'targets', 'exclusions', 'remount_usb_mode'}):
             data['batch_size'] = None
     if 'row_id' in data:
         if lookup_by_id(collection, data['row_id']):
             return 409, f'Conflict: data with this id ({data["row_id"]}) already exists in {collection}. New data could not be added at this id.)'
-    targets = data.pop('targets', None)
-    exclusions = data.pop('exclusions', None)
-    groups = data.pop('primary_user_groups', None)
-    
+    lists = {
+        'targets': data.pop('targets', None), 
+        'exclusions': data.pop('exclusions', None), 
+        'groups': data.pop('primary_user_groups', None), 
+        'remount_usb_mode': data.pop('remount_usb_mode', None)}
+
     with db.connect() as conn:
         result = conn.execute(insert(get_table(collection)).values(**data))
         row_id = result.inserted_primary_key[0]
         conn.commit()
 
-    add_to_lists_database(targets, exclusions, groups, collection, row_id)
+    add_to_lists_database(collection, row_id, lists)
     
     logging.debug(f'Added entry {row_id} to {collection}')
     return 200, f'Entry added to {collection} at row_id {row_id}'
@@ -231,9 +232,11 @@ def edit_fields(collection: str, data: dict) -> tuple[int, str]:
     if collection == 'rules':
         data['server_last_edit_date'] = datetime.now(timezone.utc)
     
-    targets = data.pop('targets', None)
-    exclusions = data.pop('exclusions', None)
-    groups = data.pop('primary_user_groups', None)
+    lists = {
+        'targets': data.pop('targets', None), 
+        'exclusions': data.pop('exclusions', None), 
+        'groups': data.pop('primary_user_groups', None), 
+        'remount_usb_mode': data.pop('remount_usb_mode', None)}
     
     row = lookup_by_id(collection, data['row_id'])
     if row:
@@ -241,7 +244,7 @@ def edit_fields(collection: str, data: dict) -> tuple[int, str]:
             t = get_table(collection)
             conn.execute(update(t).where(t.c.row_id == data['row_id']).values(**data))
             conn.commit()
-        add_to_lists_database(targets, exclusions, groups, collection, data['row_id'], True)
+        add_to_lists_database(collection, data['row_id'], lists, True)
         logging.debug(f'Edited fields of {data['row_id']} in {collection}')
         return 200, f'Fields in row {data["row_id"]} edited in {collection}.'
     else:
@@ -294,16 +297,18 @@ def lookup(collection: str, data: dict) -> list:
     '''
     tbl = get_table(collection)
 
-    targets = data.pop('targets', None)
-    exclusions = data.pop('exclusions', None)
-    groups = data.pop('primary_user_groups', None)
+    lists = {
+        'targets': data.pop('targets', None), 
+        'exclusions': data.pop('exclusions', None), 
+        'groups': data.pop('primary_user_groups', None), 
+        'remount_usb_mode': data.pop('remount_usb_mode', None)}
 
     with db.connect() as conn:
         rows = conn.execute(select(tbl).filter_by(**data))
     results = [remove_nulls_from_dict(dict(row._mapping)) for row in rows]
 
     if collection in ['rules', 'hostconfigs', 'machinestatus']:
-        results = filter_matches_by_lists(collection, targets, groups, exclusions, results)
+        results = filter_matches_by_lists(collection, lists, results)
 
     return results
 
@@ -325,7 +330,7 @@ def lookup_by_id(collection: str, row_id: str) -> dict:
         row = conn.execute(select(tbl).where(tbl.c.row_id == row_id)).first()
     if row:
         if collection in ['rules', 'hostconfigs', 'machinestatus']:
-            return add_lists(remove_nulls_from_dict(dict(row._mapping)), collection)
+            return add_lists(collection, remove_nulls_from_dict(dict(row._mapping)))
         return remove_nulls_from_dict(dict(row._mapping))
 
 
@@ -339,7 +344,7 @@ def lookup_hostconfig_by_target(target: str) -> list:
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data
     '''
-    rows = lookup('targets', {'table': 'hostconfigs', 'target': target, 'include': True})
+    rows = lookup('lists', {'linked_table': 'hostconfigs', 'key': 'targets', 'value': target})
     results = []
     row_ids = set()
     for row in rows:
@@ -363,7 +368,7 @@ def read(collection: str, limit: int, cursor = None) -> dict:
     '''
     rows = get_all_rows(collection, limit=limit+1, cursor=cursor)
 
-    rows = [add_lists(row, collection) for row in rows]
+    rows = [add_lists(collection, row) for row in rows]
 
     if collection == 'rules':
         # this data has server added fields that need to be removed
@@ -397,7 +402,7 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
             rows = conn.execute(select(tbl).where(tbl.c.server_last_edit_date > date).order_by(tbl.c.row_id).limit(limit+1))
     rows = [remove_nulls_from_dict(dict(row._mapping)) for row in rows]
 
-    rows = [add_lists(row, 'rules') for row in rows]
+    rows = [add_lists('rules', row) for row in rows]
 
     # this data has server added fields that need to be removed
     for row in rows:
@@ -413,42 +418,31 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
 # --------------------------------------------------------------------------------
 #                                Helper Functions
 # --------------------------------------------------------------------------------
-def add_lists(data, table):
-    if table in ['rules', 'hostconfigs']:
-        targets = []
-        exclusions = []
-        target_data = lookup('targets', {'linked_id': data['row_id'], 'table': table})
-        for target in target_data:
-            if target['include']:
-                targets.append(target['target'])
+def add_lists(collection, data):
+    if collection in ['hostconfigs', 'rules', 'machinestatus']:
+        rows = lookup('lists', {'linked_table': collection, 'linked_id': data['row_id']})
+        d = dict()
+        for row in rows:
+            key = row['key']
+            value = row['value']
+            if key in d:
+                d[key].append(value)
             else:
-                exclusions.append(target['target'])
-        if len(targets) > 0:
-            data['targets'] = targets
-        if len(exclusions) > 0:
-            data['exclusions'] = exclusions
-    elif table == 'machinestatus':
-        groups = lookup('usergroups', {'linked_id': data['row_id']})
-        if len(groups) > 0:
-            data['primary_user_groups'] = groups
+                d[key] = [value]
+        for key in d:
+            data[key] = d[key]
     return data
 
-def add_to_lists_database(targets, exclusions, groups, table, linked_id, delete_old=False):
-    if targets:
+def add_to_lists_database(collection, linked_id, lists, delete_old=False):
+    for key in lists:
         if delete_old:
-            delete('targets', {'table': table, 'linked_id': linked_id, 'include': True}, True)
-        for target in targets:
-            add('targets', {'table': table, 'linked_id': linked_id, 'target': target, 'include': True})
-    if exclusions:
-        if delete_old:
-            delete('targets', {'table': table, 'linked_id': linked_id, 'include': False}, True)
-        for exclusion in exclusions:
-            add('targets', {'table': table, 'linked_id': linked_id, 'target': exclusion, 'include': False})
-    if groups:
-        if delete_old:
-            delete('usergroups', {'linked_id': linked_id})
-        for group in groups:
-            add('targets', {'linked_id': linked_id, 'group': group})
+            delete('lists', {'linked_table': collection, 'linked_id': linked_id, 'key': key}, True)
+        if not (lists[key] is None):
+            if isinstance(lists[key], list):
+                for s in lists[key]:
+                    add('lists', {'linked_table': collection, 'linked_id': linked_id, 'key': key, 'value': s})
+            else:
+                logging.error(f'{lists[key]} should be a list of strings, instead it is a {type(lists[key])}. Cannot add to lists database.')
 
 def delete_row_by_id(collection, i):
     tbl = get_table(collection)
@@ -456,35 +450,24 @@ def delete_row_by_id(collection, i):
         rows = conn.execute(sqldelete(tbl).where(tbl.c.row_id == i))
         conn.commit()
     logging.debug(f'Deleted row {i} from {collection}.')
-    if collection in ['rules', 'hostconfigs']:
-        delete('targets', {'table': collection, 'linked_id': i}, True)
-    elif collection == 'machinestatus':
-        delete('usergroups', {'linked_id': i}, True)
+    if collection in ['rules', 'hostconfigs', 'machinestatus']:
+        delete('lists', {'linked_table': collection, 'linked_id': i}, True)
     store_delete_time(collection)
 
-def filter_matches_by_lists(collection, targets, groups, exclusions, results):
+def filter_matches_by_lists(collection, lists, matches):
     if collection in ['rules', 'hostconfigs', 'machinestatus']:
-        old_results = [add_lists(row, collection) for row in results]
+        old_results = [add_lists(collection, row) for row in matches]
         results = []
-
         for result in old_results:
-            to_add = False
-            if targets:
-                if 'targets' in result and set(result['targets']) == set(targets):
-                    to_add = True
-            elif 'targets' not in result:
-                to_add = True
-            if exclusions:
-                if 'exclusions' in result and set(result['exclusions']) == set(exclusions):
-                    to_add = True
-            elif 'exclusions' not in result:
-                to_add = True
-            if groups:
-                if 'primary_user_groups' in result and set(result['primary_user_groups']) == set(groups):
-                    to_add = True
-            elif 'primary_user_groups' not in result:
-                to_add = True
-            if to_add:
+            is_match = True
+            for key in lists:
+                val = lists[key]
+                if val is None:
+                    if key in result:
+                        is_match = False
+                elif (not (key in result)) or (set(result[key]) != set(val)):
+                    is_match = False   
+            if is_match:
                 results.append(result)
     return results
 

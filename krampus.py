@@ -86,16 +86,6 @@ def setup_event_handler():
         # pub sub event handler
         logging.info("Using Pub/Sub as the event handler.")
         import event_handlers.event_handler_pubsub as event_handler
-    elif os.environ.get('KRAMPUS_EVENT_HANDLER_FULL'):
-        # full events published to krampus' database
-        logging.info("Using Krampus' database as the event handler, to store full events.")
-        import event_handlers.event_handler_krampus_full as event_handler
-        setup_data = db
-    elif os.environ.get('KRAMPUS_EVENT_HANDLER_SUMMARY'):
-        # summaries of events published to krampus' database
-        logging.info("Using Krampus' database as the event handler, to store summarised events.")
-        import event_handlers.event_handler_krampus_summary as event_handler
-        setup_data = db
     else:
         # no event handler
         logging.warning(f'No event handler found. Events will not be processed.')

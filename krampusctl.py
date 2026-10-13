@@ -309,13 +309,13 @@ def process_args():
 		usage='%(prog)s [options]'
 	)
     parser.add_argument('--apply', '-a', dest='rep_path',
-                        help='copy this data to the database')
+                        help='for each collection, copy this data to the database')
     parser.add_argument('--add', dest='add_path',
                         help='add this data to the database, without creating duplicates')
-    parser.add_argument('--edit_rows', dest='edit_row_path',
-                        help='fully replace the data in the database at a specific id, with the assumption that it exists')
     parser.add_argument('--edit_fields', dest='edit_fields_path',
                         help='edits specifid fields in the data in the database at a specific row id, with the assumption that it exists')
+    parser.add_argument('--edit_rows', dest='edit_row_path',
+                        help='fully replace the data in the database at a specific id, with the assumption that it exists')
     parser.add_argument('--delete', '-d', dest='del_path',
                         help='removes matches for the given data from the database, with the assumption that exactly one match will be found.')
     parser.add_argument('--delete_multiple', dest='del_path_m',
