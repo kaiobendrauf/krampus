@@ -1,12 +1,9 @@
 import logging
-import os
-import sys
 
 from datetime import datetime, timezone
 from sqlalchemy import delete as sqldelete
-from sqlalchemy import Boolean, create_engine, DateTime, insert, Integer, MetaData, select, String, Table, text, update
-from sqlalchemy.dialects.mysql import VARCHAR
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy import Boolean, create_engine, DateTime, insert, Integer, MetaData, select, String, Table, update
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 db = None
 '''
@@ -161,7 +158,7 @@ def add(collection: str, data: dict) -> tuple[int, str]:
 
 # def add_or_edit(collection: str, data: dict) -> tuple[int, str]:
 #     '''
-#     Adds one row of the database, or edits it if data contains an row_id and that row_id already exists in the database. 
+#     Adds one row of the database, or edits it if data contains a row_id and that row_id already exists in the database.
 #     For the "rules" collection the datetime a rule is added / edited is tracked.
 
 #     Parameters:
@@ -188,7 +185,7 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
         collection: name of the collection to add data to
         data: data to be deleted, rows that contain all key value pairs in this dictionary will be deleted
         multiple: whether multiple rows should be deleted if data matches multiple rows
-                  when set to False, no data is deleted if multilpe matches are found
+                  when set to False, no data is deleted if multiple matches are found
 
     Returns:
         int: http status code reflecting the success of the attempted action
@@ -223,7 +220,7 @@ def edit_fields(collection: str, data: dict) -> tuple[int, str]:
         str: description of action taken
     '''
     if 'row_id' not in data:
-        return 400,  f'Row provided does not contain a row_id, unkown which row to edit.'
+        return 400,  f'Row provided does not contain a row_id, unknown which row to edit.'
     if collection == 'rules':
         data['server_last_edit_date'] = datetime.now(timezone.utc)
     lists = create_list_dict(data)
@@ -256,7 +253,7 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
         str: description of action taken
     '''
     if 'row_id' not in data:
-        return 400,  f'Row provided does not contain a row_id, unkown which row to edit.'
+        return 400,  f'Row provided does not contain a row_id, unknown which row to edit.'
     table = get_table(collection)
     keys = [column.key for column in table.c]
     for key in keys:
@@ -266,7 +263,7 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
     return edit_fields(collection, data)
 
 def get_last_rule_delete() -> datetime:
-    # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occured 
+    # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occurred
     row = lookup_by_id('krampusinfo', 1)
     if row:
         return row['last_rule_delete']
@@ -297,7 +294,7 @@ def lookup(collection: str, data: dict) -> list:
     return rows
 
 
-def lookup_by_id(collection: str, row_id: str) -> dict:
+def lookup_by_id(collection: str, row_id) -> dict | None:
     '''
     Returns the row in the collection matching the row id
 
@@ -323,7 +320,7 @@ def lookup_hostconfig_by_target(target: str) -> list:
     Returns all hostconfigs in the collection that apply to a given target
 
     Parameters:
-        targer: the target of the hostconfig
+        target: the target of the hostconfig
 
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data

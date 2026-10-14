@@ -2,9 +2,9 @@ import logging
 import os
 import sys
 
-from datetime import datetime, timezone
+from datetime import datetime
 
-from . import sqlalchemy_util 
+from . import sqlalchemy_util
 
 db = None
 
@@ -71,7 +71,7 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
         collection: name of the collection to add data to
         data: data to be deleted, rows that contain all key value pairs in this dictionary will be deleted
         multiple: whether multiple rows should be deleted if data matches multiple rows
-                  when set to False, no data is deleted if multilpe matches are found
+                  when set to False, no data is deleted if multiple matches are found
 
     Returns:
         int: http status code reflecting the success of the attempted action
@@ -115,7 +115,7 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
 
 
 def get_last_rule_delete() -> datetime:
-    # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occured 
+    # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occurred
     return sqlalchemy_util.get_last_rule_delete()
 
 
@@ -133,7 +133,7 @@ def lookup(collection: str, data: dict) -> list:
     return sqlalchemy_util.lookup(collection, data)
 
 
-def lookup_by_id(collection: str, row_id: str) -> dict:
+def lookup_by_id(collection: str, row_id: str) -> dict | None:
     '''
     Returns the row in the collection matching the row id
 
@@ -153,7 +153,7 @@ def lookup_hostconfig_by_target(target: str) -> list:
     Returns all hostconfigs in the collection that apply to a given target
 
     Parameters:
-        targer: the target of the hostconfig
+        target: the target of the hostconfig
 
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data
