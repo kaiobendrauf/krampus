@@ -1,9 +1,9 @@
 FROM python:3-slim
 LABEL org.opencontainers.image.authors="j@jc0b.computer"
 
-COPY requirements.txt /krampus/
+COPY requirements.krampus.txt /krampus/
 
-RUN pip3 install --no-cache-dir -U -r /krampus/requirements.txt
+RUN pip3 install --no-cache-dir -U -r /krampus/requirements.krampus.txt
 
 COPY . /krampus
 
