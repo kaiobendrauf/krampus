@@ -4,7 +4,7 @@ import sys
 
 from datetime import datetime
 
-import sqlalchemy_util
+from . import sqlalchemy_util
 
 db = None
 
