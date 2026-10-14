@@ -284,7 +284,8 @@ class KrampusRule(Rule):
     row_id: int = None
 
     def __post_init__(self):
-        if ((not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions]))):
+        super().__post_init__()
+        if not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions]):
             raise Exception("Could not init KrampusRule, wrong data type given.")
 
         if not self.targets:
@@ -298,6 +299,7 @@ class KrampusHostConfig(HostConfig):
     row_id: int = None
 
     def __post_init__(self):
+        super().__post_init__()
         if not all(isinstance(i, (list, type(None))) for i in [self.targets, self.exclusions]):
             raise Exception("Could not init KrampusHostConfig, wrong data type given.")
 

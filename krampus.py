@@ -70,10 +70,13 @@ def setup_db():
     db.setup()
 
 def validate_data(collection, data):
-    if collection == 'rules':
-        KrampusRule(**data)
-    if collection == 'hostconfigs':
-        KrampusHostConfig(**data)
+    try:
+        if collection == 'rules':
+            KrampusRule(**data)
+        elif collection == 'hostconfigs':
+            KrampusHostConfig(**data)
+    except Exception as err:
+        flask.abort(400, description=str(err))
 
 # ----------------------------------------
 #            Event Handler

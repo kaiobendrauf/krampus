@@ -28,17 +28,17 @@ def setup():
         logging.error('You need to specify the database name to use, using the "DB_NAME" environment variable.')
         sys.exit(1)
     if not db_host:
-        logging.error('You need to specify the database host to use, using the "DB_HOST" environment variable.')
+        logging.error('You need to specify the database host to use, using the "MYSQL_HOST" environment variable.')
         sys.exit(1)
     if not db_port:
         # default to 3306
         db_port = 3306
     if not db_user:
-        logging.error('You need to specify the MySQL user to use, using the "DB_USER" environment variable.')
+        logging.error('You need to specify the MySQL user to use, using the "MYSQL_USER" environment variable.')
         sys.exit(1)
     if not db_password:
         logging.error(
-            'You need to specify the password for your MySQL user, using the "DB_PASSWORD" environment variable.')
+            'You need to specify the password for your MySQL user, using the "MYSQL_PW" environment variable.')
         sys.exit(1)
 
     connection_string = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
