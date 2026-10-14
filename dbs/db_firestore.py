@@ -1,7 +1,6 @@
 import logging
 import os
 import sys
-import uuid
 
 from datetime import datetime, timezone
 from google.cloud import firestore
@@ -70,7 +69,7 @@ def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]
         collection: name of the collection to add data to
         data: data to be deleted, rows that contain all key value pairs in this dictionary will be deleted
         multiple: whether multiple rows should be deleted if data matches multiple rows
-                  when set to False, no data is deleted if multilpe matches are found
+                  when set to False, no data is deleted if multiple matches are found
 
     Returns:
         int: http status code reflecting the success of the attempted action
@@ -105,7 +104,7 @@ def edit_fields(collection: str, data: dict) -> tuple[int, str]:
         str: description of action taken
     '''
     if 'row_id' not in data:
-        return 400,  f'Row provided does not contain a row_id, unkown which row to edit.'
+        return 400,  f'Row provided does not contain a row_id, unknown which row to edit.'
     if collection == 'rules':
         data['server_last_edit_date'] = datetime.now(timezone.utc)
     
@@ -133,7 +132,7 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
         str: description of action taken
     '''
     if 'row_id' not in data:
-        return 400,  f'Row provided does not contain a row_id, unkown which row to edit.'
+        return 400,  f'Row provided does not contain a row_id, unknown which row to edit.'
     if collection == 'rules':
             data['server_last_edit_date'] = datetime.now(timezone.utc)
     row = lookup_by_id(collection, data['row_id'])
@@ -146,7 +145,7 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
 
 
 def get_last_rule_delete() -> datetime:
-    # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occured 
+    # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occurred
     doc = lookup_by_id('krampusinfo', '1')
     if doc:
         return doc['last_rule_delete']
@@ -171,7 +170,7 @@ def lookup(collection: str, data: dict) -> list:
     return [doc.to_dict() for doc in list(docs)]
 
 
-def lookup_by_id(collection: str, row_id) -> dict:
+def lookup_by_id(collection: str, row_id) -> dict | None:
     '''
     Returns the row in the collection matching the row id
 
@@ -193,7 +192,7 @@ def lookup_hostconfig_by_target(target: str) -> list:
     Returns all hostconfigs in the collection that apply to a given target
 
     Parameters:
-        targer: the target of the hostconfig
+        target: the target of the hostconfig
 
     Returns:
         list: list of dicts, where every dict reflects one row in the database matching the given data
@@ -201,7 +200,6 @@ def lookup_hostconfig_by_target(target: str) -> list:
     query = db.collection('hostconfigs').where(filter=firestore.FieldFilter('targets', 'array_contains', target))
     docs = query.stream()
     return [doc.to_dict() for doc in list(docs)]
-
 
 def read(collection: str, limit: int, cursor = None) -> dict:
     '''
@@ -274,7 +272,6 @@ def get_all_docs(collection, limit=None, cursor=None):
         query = query.limit(limit)
     docs = query.stream()
     return [doc.to_dict() for doc in list(docs)]
-
 
 def store_delete_time(collection):
     if collection == 'rules':

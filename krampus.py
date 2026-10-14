@@ -528,7 +528,7 @@ def process_postflight(machine_id, machine_status, data):
 
 def process_postflight_sync_type(machine_id, machine_status, data):
     if ('syncType' in data and (data['syncType'].lower() == 'clean' or data['syncType'].lower() == 'clean_all')) or ('sync_type' in data and (data['sync_type'].lower() == 'clean' or data['sync_type'].lower() == 'clean_all')):
-        logging.debug(f'Clean sync for {machine_id} succesfull.')
+        logging.debug(f'Clean sync for {machine_id} successful.')
         pick_future_clean_sync_by(machine_status)
         logging.debug(f'Updating clean_sync_by date for {machine_id} to {datetime.now(timezone.utc)}.')
         machine_status['last_clean_sync'] = datetime.now(timezone.utc)

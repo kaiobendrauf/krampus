@@ -15,7 +15,6 @@ from santa_classes import KrampusHostConfig, KrampusRule
 def server_req(url, data, accepted_errors=[], fail_on_errors=[]):
     for i in range(3):
         req_result = send_authenticated_request(url, data)
-        result = req_result
         if req_result.status_code < 300:
             if not req_result.headers.get('content-type') == 'application/json':
                 logging.debug(req_result.text)
@@ -59,12 +58,12 @@ def replicate(data, server_url, limit):
         while 'cursor' in req_result:
             # still reading
             # process data (note data that does not need to be added, delete what needs to be deleted)
-            collection_data = process_replicate_chunk(req_result['data'], collection_data, collection, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
+            collection_data = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
             # get new data
             req_result = server_req(url, {'limit': limit, 'cursor':req_result['cursor']})
             req_result = process_rep_response(req_result)
         # process last data chunk
-        collection_data = process_replicate_chunk(req_result['data'], collection_data, collection, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
+        collection_data = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
         # for collection add all missing data
         for d in collection_data:
             server_req(f'{server_url}/db-add/{collection}', d, fail_on_errors=[409])
@@ -80,8 +79,8 @@ def process_rep_response(req_res):
     logging.error('Unexpected response from server. Cannot continue.')
     sys.exit(1)
 
-def process_replicate_chunk(response_data, data, collection, del_url, edit_url):
-    # sort data so that we find matches baserd on row_id first
+def process_replicate_chunk(response_data, data, del_url, edit_url):
+    # sort data so that we find matches based on row_id first
     id_data = []
     no_id_data = []
     for d in data:
@@ -110,7 +109,6 @@ def process_replicate_chunk(response_data, data, collection, del_url, edit_url):
     return new_data
 
 def check_dict_to_database(database, d):
-    id_match = False
     if 'row_id' in d:
         # match counts as any row with the same id
         for data in database:
@@ -126,10 +124,10 @@ def check_dict_to_database(database, d):
 def is_dict_match(d1, d2):
     match = True
     for key in d1:
-        if match and not(key in d2 and d2[key] == d1[key]):
+        if (match is not None) and not(key in d2 and d2[key] == d1[key]):
             match = False
     for key in set(d2.keys()).difference(set(d1.keys())):
-        if match and key != 'row_id' and (not (d2[key] == None)):
+        if (match is not None) and (key != 'row_id') and (d2[key] is not None):
             match = False
     return match
 
@@ -160,13 +158,11 @@ def edit_fields(data, server_url):
 def delete(data, server_url):
     for collection in data:
         for row in data[collection]:
-            success = False
             req_result = server_req(f'{server_url}/db-del/{collection}', row, fail_on_errors=[400], accepted_errors=[404])
 
 def delete_multiple(data, server_url):
     for collection in data:
         for row in data[collection]:
-            success = False
             req_result = server_req(f'{server_url}/db-del-multiple/{collection}', row, accepted_errors=[404])
 
 def check_hostconfigs(l, allow_partial=False):
@@ -245,10 +241,10 @@ def check_path_exists(path, should_exit=True):
     if os.path.exists(path):
         return True
     elif should_exit:
-        logging.error(f'Path {path} dpes not exist.')
+        logging.error(f'Path {path} does not exist.')
         sys.exit(1)
     else:
-        logging.warning(f'Path {path} does not exist. Continueing without access')
+        logging.warning(f'Path {path} does not exist. Continuing without access')
         return False
 
 # ----------------------------------------
@@ -320,7 +316,7 @@ def process_args():
     parser.add_argument('--add', dest='add_path',
                         help='add this data to the database, without creating duplicates')
     parser.add_argument('--edit_fields', dest='edit_fields_path',
-                        help='edits specifid fields in the data in the database at a specific row id, with the assumption that it exists')
+                        help='edits specific fields in the data in the database at a specific row id, with the assumption that it exists')
     parser.add_argument('--edit_rows', dest='edit_row_path',
                         help='fully replace the data in the database at a specific id, with the assumption that it exists')
     parser.add_argument('--delete', '-d', dest='del_path',
