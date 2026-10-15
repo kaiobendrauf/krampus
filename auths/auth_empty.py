@@ -10,6 +10,7 @@ def auth_sync(request, machine_id: str=None):
     return True
 
 def setup(is_ctl: bool, data=None):
+    # Sets up authentication for either krampusctl or the syncs, based on the is_ctl variable
     return
 
 # --------------------------------------------------------------------------------
