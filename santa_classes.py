@@ -226,7 +226,7 @@ class Rule:
         self.rule_type = RuleType[self.rule_type]
 
         l = [
-                (str, [self.identifier, self.custom_msg, self.custom_url, self.notification_app_name, self.cel_expr]),
+                (str, [self.identifier]),
                 ((str, type(None)), [self.custom_msg, self.custom_url, self.notification_app_name, self.cel_expr])]
         type_checking(l, 'Rule')
 

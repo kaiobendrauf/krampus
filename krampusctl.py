@@ -14,7 +14,8 @@ from santa_classes import KrampusHostConfig, KrampusRule
 # ----------------------------------------
 def server_req(url, data, accepted_errors=[], fail_on_errors=[]):
     for i in range(3):
-        req_result = send_authenticated_request(url, data)
+        headers = os.environ.get('REQ_HEADER')
+        req_result = send_authenticated_request(url, data, headers)
         if req_result.status_code < 300:
             if not req_result.headers.get('content-type') == 'application/json':
                 logging.debug(req_result.text)
@@ -37,11 +38,19 @@ def server_req(url, data, accepted_errors=[], fail_on_errors=[]):
 # ----------------------------------------
 #              auth logic
 # ----------------------------------------
-def send_authenticated_request(url, data):
-    if os.environ.get('CTL_SECRET'):
-        return requests.post(url, json=data, headers={'Krampus-Auth': os.environ.get('CTL_SECRET')})
-    elif os.environ.get('AUTH_HEADER_NAME') and os.environ.get('AUTH_HEADER_VALUE'):
-        return requests.post(url, json=data, headers={os.environ.get('AUTH_HEADER_NAME'): os.environ.get('AUTH_HEADER_VALUE')})
+def send_authenticated_request(url, data, headers):
+    if headers is None:
+        headers = dict()
+    if os.environ.get('CTL_SECRET') is not None:
+        headers['Krampus-Auth'] = os.environ.get('CTL_SECRET')
+    if os.environ.get('AUTH_HEADER_KEY') is not None:
+        if os.environ.get('AUTH_HEADER_VALUE') is not None:
+            headers[os.environ.get('AUTH_HEADER_KEY')] = os.environ.get('AUTH_HEADER_VALUE')
+            print(headers)
+        else:
+            logging.warning(f'Environment variable `AUTH_HEADER_KEY` found but environment variable `AUTH_HEADER_VALUE` is missing. This header was not added to the request.')
+    if headers:
+        return requests.post(url, json=data, headers=headers)
     else:
         return requests.post(url, json=data)
 
