@@ -28,10 +28,9 @@ def setup_auth():
 def setup_sync_auth():
     global auth_sync
     setup_data = None
-    if os.environ.get('SYNC_SECRET'):
+    if os.environ.get('SYNC_SECRET') is not None:
         # header auth
         import auths.auth_header as auth_sync
-        setup_data = os.environ.get('SYNC_SECRET')
     else:
         logging.info('No valid authentication for syncs defined.')
         import auths.auth_empty as auth_sync
@@ -40,10 +39,12 @@ def setup_sync_auth():
 def setup_ctl_auth():
     global auth_ctl
     setup_data = None
-    if os.environ.get('CTL_SECRET'):
+    if os.environ.get('CTL_SECRET') is not None:
         # header auth
         import auths.auth_header as auth_ctl
-        setup_data = os.environ.get('CTL_SECRET')
+    elif os.environ.get('JWT_SECRET') is not None:
+        import auths.auth_jwt as auth_ctl
+        setup_data = server
     else:
         logging.warning('No valid authentication for krampusctl defined. Make sure you are authenticating elsewhere.')
         import auths.auth_empty as auth_ctl
@@ -55,13 +56,13 @@ def setup_ctl_auth():
 # ----------------------------------------
 def setup_db():
     global db
-    if os.environ.get('GCP_PROJ_ID'):
+    if os.environ.get('GCP_PROJ_ID') is not None:
         # firestore database
         import dbs.db_firestore as db
-    elif os.environ.get('MYSQL_HOST'):
+    elif os.environ.get('MYSQL_HOST') is not None:
         # mysql database
         import dbs.db_mysql as db
-    elif os.environ.get('POSTGRES_HOST'):
+    elif os.environ.get('POSTGRES_HOST') is not None:
         # postgres database
         import dbs.db_psql as db
     else:
@@ -299,7 +300,18 @@ def db_read(collection):
 #         logging.warning(f'Attempted db-read request failed because authentication failed.')
 #         flask.abort(403)
 
+# ----------------------------------------
+#          Listeners - auth
+# ----------------------------------------
+@server.route('/register-ctl', methods=['POST'])
+def register_ctl():
+    data, status_code = auth_ctl.register(flask.request)
+    return flask.Response(json.dumps(data), mimetype='application/json', status=status_code)
 
+@server.route('/register-sync', methods=['POST'])
+def register_sync():
+    data, status_code = auth_syn.register(flask.request)
+    return flask.Response(json.dumps(data), mimetype='application/json', status=status_code)
 
 # ----------------------------------------
 #           SANTA Request Logic

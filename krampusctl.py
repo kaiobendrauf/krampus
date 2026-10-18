@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-import logging
 import argparse
+import json
+import logging
 import os
 import requests
 import sys
@@ -12,26 +13,32 @@ from santa_classes import KrampusHostConfig, KrampusRule
 # ----------------------------------------
 #          server requests
 # ----------------------------------------
-def server_req(url, data, accepted_errors=[], fail_on_errors=[]):
+def server_req(url, data, accepted_errors=[], fail_on_errors=[], debug_print=True, add_auth=True):
     for i in range(3):
         headers = os.environ.get('REQ_HEADER')
-        req_result = send_authenticated_request(url, data, headers)
+        if add_auth:
+            req_result = send_authenticated_request(url, data, headers)
+        else:
+            req_result = requests.post(url, json=data)
         if req_result.status_code < 300:
             if not req_result.headers.get('content-type') == 'application/json':
                 logging.debug(req_result.text)
             return req_result
         elif req_result.status_code in accepted_errors:
             logging.warning(req_result.text)
-            logging.debug(data)
+            if debug_print:
+                logging.debug(data)
             return req_result
         elif req_result.status_code in fail_on_errors:
             logging.error(f'Error {req_result.status_code}. {req_result.text}')
-            logging.debug(data)
+            if debug_print:
+                logging.debug(data)
             logging.error(f'Cannot continue.')
             sys.exit(1)
         else:
             logging.error(f'Error {req_result.status_code}. {req_result.text}')
-            logging.debug(data)
+            if debug_print:
+                logging.debug(data)
     logging.error(f'Cannot continue.')
     sys.exit(1)
 
@@ -49,10 +56,28 @@ def send_authenticated_request(url, data, headers):
             print(headers)
         else:
             logging.warning(f'Environment variable `AUTH_HEADER_KEY` found but environment variable `AUTH_HEADER_VALUE` is missing. This header was not added to the request.')
+    if os.environ.get('JWT_USERNAME') is not None:
+        headers['Authorization'] = f'Bearer {jwt_token}'
     if headers:
         return requests.post(url, json=data, headers=headers)
     else:
         return requests.post(url, json=data)
+
+def prep_auth(url):
+    if os.environ.get('JWT_USERNAME') is not None:
+        if os.environ.get('JWT_PASSWORD') is not None:
+            req_result = server_req(f'{url}/register-ctl', {'username': os.environ.get('JWT_USERNAME'), 'password': os.environ.get('JWT_PASSWORD')}, fail_on_errors=[415, 401, 400, 403], debug_print=False, add_auth=False)
+            req_result = process_rep_response(req_result)
+            if 'access_token' in req_result:
+                global jwt_token
+                jwt_token = req_result['access_token']
+                logging.info('JWT Authenication Successful.')
+            else:
+                logging.error(f'Register failed to return an access token.')
+                sys.exit(1)
+        else:
+            logging.error(f'Authenticating with JWT but password missing. Please add environment variable `JWT_PASSWORD`.')
+            sys.exit(1)
 
 # ----------------------------------------
 #               DB logic
@@ -69,7 +94,7 @@ def replicate(data, server_url, limit):
             # process data (note data that does not need to be added, delete what needs to be deleted)
             collection_data = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
             # get new data
-            req_result = server_req(url, {'limit': limit, 'cursor':req_result['cursor']})
+            req_result = server_req(url, {'limit': limit, 'cursor': req_result['cursor']})
             req_result = process_rep_response(req_result)
         # process last data chunk
         collection_data = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
@@ -82,10 +107,9 @@ def process_rep_response(req_res):
     if req_res.headers.get('content-type') == 'application/json':
         # get json
         req_res = req_res.json()
-        # check if data has expected shape
-        if 'data' in req_res:
-            return req_res
-    logging.error('Unexpected response from server. Cannot continue.')
+        return req_res
+    logging.error(f'Unexpected response from server: content type is not application/json. Cannot continue.')
+    logging.debug(f'{req_res.status_code}: {req_res.text}')
     sys.exit(1)
 
 def process_replicate_chunk(response_data, data, del_url, edit_url):
@@ -334,44 +358,47 @@ def process_args():
                            help='removes all matches for the given data from the database, with the assumption that at least one match will be found.')
     parser.add_argument('--limit', '-l', dest='limit', default=50,
                         help='limit for reading from database', type=int)
-    parser.add_argument('--output_yaml', '-o', dest='output',
+    parser.add_argument('--output_yaml', '-o', dest='out_path',
                         help='path where a yaml file will be written to reflect the current rules and hostconfigs in krampus.')
     parser.add_argument('--server', '-s', dest='server_url', default="http://0.0.0.0:8000",
                         help='krampus url')
     args = parser.parse_args()
-    return args.rep_path, args.add_path, args.edit_row_path, args.edit_fields_path, args.del_path, args.del_path_m, args.limit, args.server_url, args.output
+    return args.rep_path, args.add_path, args.edit_row_path, args.edit_fields_path, args.del_path, args.del_path_m, args.limit, args.server_url, args.out_path
 
 # ----------------------------------------
 #                 Main
 # ----------------------------------------
 def main():
     setup_logging()
-    rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, limit, server_url, output = process_args()
+    rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, limit, server_url, out_path = process_args()
 
     if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m].count(None) < 4:
         logging.error(f'Please only use one argument that edits the krampus database.')
         sys.exit(1)
 
-    if rep_path:
+    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, out_path].count(None) > 1:
+        prep_auth(server_url)
+
+    if rep_path is not None:
         data = read_input_file(rep_path, False)
         replicate(data, server_url, limit)
-    if add_path:
+    if add_path is not None:
         data = read_input_file(add_path, False)
         add(data, server_url)
-    if edit_row_path:
+    if edit_row_path is not None:
         data = read_input_file(edit_row_path, False)
         edit_row(data, server_url)
-    if edit_fields_path:
+    if edit_fields_path is not None:
         data = read_input_file(edit_fields_path, True)
         edit_fields(data, server_url)
-    if del_path:
+    if del_path is not None:
         data = read_input_file(del_path, True)
         delete(data, server_url)
-    if del_path_m:
+    if del_path_m is not None:
         data = read_input_file(del_path_m, True)
         delete_multiple(data, server_url)
-    if output:
-        write_yaml(output, server_url, limit)
+    if out_path is not None:
+        write_yaml(out_path, server_url, limit)
 
 if __name__ == '__main__':
     main()

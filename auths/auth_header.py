@@ -1,21 +1,30 @@
+import logging
+import os
+
 # --------------------------------------------------------------------------------
 #                                Required Functions
 # --------------------------------------------------------------------------------
 def auth_ctl(request):
     # Given a request, returns True if the ctl request can be authenticated
-    return auth_check(ctl_secret, request)
+    return auth_check(os.environ.get('CTL_SECRET'), request)
 
 def auth_sync(request, machine_id: str=None):
     # Given a request and optionally a machine_id, returns True if the sync request can be authenticated
-    return auth_check(sync_secret, request)
+    return auth_check(os.environ.get('SYNC_SECRET'), request)
+
+def register(request):
+    return {"msg": "No registration required"}, 200
 
 def setup(is_ctl: bool, data=None):
+    # Sets up authentication for either krampusctl or the syncs, based on the is_ctl variable
     if is_ctl:
-        global ctl_secret 
-        ctl_secret = data
+        if os.environ.get('CTL_SECRET') is None:
+            logging.error(f'Trying to set up header as authentication but missing environ variable "CTL_SECRET"'.)
+            sys.exit(1)
     else:
-        global sync_secret 
-        sync_secret = data
+        if os.environ.get('SYNC_SECRET') is None:
+            logging.error(f'Trying to set up header as authentication but missing environ variable "SYNC_SECRET"'.)
+            sys.exit(1)
 
 
 # --------------------------------------------------------------------------------

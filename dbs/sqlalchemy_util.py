@@ -69,42 +69,6 @@ class MachineStatus(Base):
     last_clean_sync: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     clean_sync_by: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
-
-# class UserGroups(Base):
-#     __tablename__ = 'usergroups'
-
-#     row_id: Mapped[int] = mapped_column(primary_key=True)
-#     linked_id: Mapped[int] = mapped_column(Integer)
-#     group: Mapped[str] = mapped_column(String(255))
-
-
-# class Event(Base):
-#     __tablename__ = "events_full"
-#     id: Mapped[int] = mapped_column(primary_key=True)
-#     file_sha256:
-
-class EventSummary(Base):
-    __tablename__ = 'eventssummary'
-
-    row_id: Mapped[int] = mapped_column(primary_key=True)
-    file_name: Mapped[str] = mapped_column(String(255))
-    DECISION_UNKNOWN: Mapped[int] = mapped_column(Integer, nullable=True)
-    ALLOW_UNKNOWN: Mapped[int] = mapped_column(Integer, nullable=True)
-    ALLOW_BINARY: Mapped[int] = mapped_column(Integer, nullable=True)
-    ALLOW_CERTIFICATE: Mapped[int] = mapped_column(Integer, nullable=True)
-    ALLOW_SCOPE: Mapped[int] = mapped_column(Integer, nullable=True)
-    ALLOW_TEAMID: Mapped[int] = mapped_column(Integer, nullable=True)
-    ALLOW_SIGNINGID: Mapped[int] = mapped_column(Integer, nullable=True)
-    ALLOW_CDHASH: Mapped[int] = mapped_column(Integer, nullable=True)
-    BLOCK_UNKNOWN: Mapped[int] = mapped_column(Integer, nullable=True)
-    BLOCK_BINARY: Mapped[int] = mapped_column(Integer, nullable=True)
-    BLOCK_CERTIFICATE: Mapped[int] = mapped_column(Integer, nullable=True)
-    BLOCK_SCOPE: Mapped[int] = mapped_column(Integer, nullable=True)
-    BLOCK_TEAMID: Mapped[int] = mapped_column(Integer, nullable=True)
-    BLOCK_SIGNINGID: Mapped[int] = mapped_column(Integer, nullable=True)
-    BLOCK_CDHASH: Mapped[int] = mapped_column(Integer, nullable=True)
-    BUNDLE_BINARY: Mapped[int] = mapped_column(Integer, nullable=True)
-
 def setup_engine(connection_string, echo=True):
     engine = create_engine(connection_string)
 

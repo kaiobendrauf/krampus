@@ -6,3 +6,4 @@ pyyaml
 sqlalchemy
 mysql-connector-python
 psycopg[binary]
+pyjwt
