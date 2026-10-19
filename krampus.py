@@ -310,7 +310,7 @@ def register_ctl():
 
 @server.route('/register-sync', methods=['POST'])
 def register_sync():
-    data, status_code = auth_syn.register(flask.request)
+    data, status_code = auth_sync.register(flask.request)
     return flask.Response(json.dumps(data), mimetype='application/json', status=status_code)
 
 # ----------------------------------------

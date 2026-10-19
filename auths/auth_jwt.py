@@ -1,3 +1,4 @@
+import hmac
 import logging
 import os
 import sys
@@ -20,8 +21,8 @@ def auth_ctl(request):
             token = auth.removeprefix('Bearer ')
             try:
                 decode = jwt.decode(token, os.environ.get('JWT_SECRET'), options={'require': ['user', 'iat', 'exp']}, algorithms=["HS256"])
-                if decode['user'] == os.environ.get('JWT_USERNAME'):
-                    if datetime.fromtimestamp(decode['iat']) + timedelta(minutes=minutes) == datetime.fromtimestamp(decode['exp']):
+                if hmac.compare_digest(decode['user'], os.environ.get('JWT_USERNAME')):
+                    if datetime.fromtimestamp(decode['iat']) + timedelta(minutes=int(minutes)) == datetime.fromtimestamp(decode['exp']):
                         return True
                     else:
                         logging.warning('JWT authentication failed becasue unexpected iat or exp.')
@@ -41,7 +42,7 @@ def register(request):
     if minutes is None:
         minutes = 5 
 
-    if flask.request.content_type == 'application/json':
+    if request.content_type == 'application/json':
         data = flask.request.get_json()
     else:
         return {'msg': 'Expected data as json.'}, 415
@@ -58,7 +59,7 @@ def register(request):
     d = {
         'user': os.environ.get('JWT_USERNAME'), 
         'iat': datetime.now(timezone.utc),
-        'exp': datetime.now(timezone.utc) + timedelta(minutes=minutes)}
+        'exp': datetime.now(timezone.utc) + timedelta(minutes=int(minutes))}
 
     access_token = jwt.encode(d, os.environ.get('JWT_SECRET'), algorithm="HS256")
     return {'access_token': access_token}, 200
