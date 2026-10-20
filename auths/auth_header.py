@@ -13,7 +13,17 @@ def auth_sync(request, machine_id: str=None):
     return auth_check(os.environ.get('SYNC_SECRET'), request)
 
 def register(request):
-    return {"msg": "No registration required"}, 200
+    '''
+    If applicable and the request is able to authenticate returns information needed for further authentication (eg a token)
+
+    Parameters:
+        request: flask request object
+
+    Returns:
+        dict: dict containing the needed information or description of action taken under 'msg' key
+        int: http status code reflecting the success of the attempted action
+    '''
+    return {'msg':'No registration required'}, 200
 
 def setup(is_ctl: bool, data=None):
     # Sets up authentication for either krampusctl or the syncs, based on the is_ctl variable

@@ -56,6 +56,8 @@ class KrampusInfo(Base):
 
     row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     last_rule_delete: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    block_preflight: Mapped[bool] = mapped_column(Boolean)
+    block_ruledownload: Mapped[bool] = mapped_column(Boolean)
 
 class MachineStatus(Base):
     __tablename__ = 'machinestatus'
@@ -69,6 +71,7 @@ class MachineStatus(Base):
     last_clean_sync: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     clean_sync_by: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
+
 def setup_engine(connection_string, echo=True):
     engine = create_engine(connection_string)
 
@@ -80,10 +83,11 @@ def setup_engine(connection_string, echo=True):
 
     return db
 
+
 def setup():
     if len(get_all_rows('krampusinfo')) < 1:
         with db.connect() as conn:
-            conn.execute(insert(get_table('krampusinfo')).values(row_id=1, last_rule_delete=datetime.now(timezone.utc)))
+            conn.execute(insert(get_table('krampusinfo')).values(row_id=1, last_rule_delete=datetime.now(timezone.utc), block_preflight=False, block_ruledownload=False))
             conn.commit()
 
 
@@ -139,6 +143,27 @@ def add(collection: str, data: dict) -> tuple[int, str]:
 #     else:
 #         # add
 #         return add(collection, data)
+
+def block_sync(collection: str) -> tuple[int, str]:
+    '''
+    Blocks either preflight or rule download stages of the sync, while the relevant collection is edited.
+    Parameters:
+        collection: name of the collection that should not be used for the sync
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    if collection == 'hostconfigs':
+        edit_fields('krampusinfo', {'block_preflight': True})
+        logging.info('Preflight blocked.')
+        return 200, 'Blocked Preflight'
+    elif collection == 'rules':
+        edit_fields('krampusinfo', {'block_ruledownload': True})
+        logging.info('Rule Download blocked.')
+        return 200, 'Rule download blocked.'
+    else:
+        return 400, 'Invalid collection given to block sync.'
 
 
 def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]:
@@ -231,6 +256,28 @@ def get_last_rule_delete() -> datetime:
     row = lookup_by_id('krampusinfo', 1)
     if row:
         return row['last_rule_delete']
+
+
+def is_sync_stage_blocked(stage: str) -> bool:
+    '''
+    Check whether the named sync stage is blocked
+
+    Parameters:
+        stage: can be 'preflight', 'eventupload,' 'ruledownload', 'postflight'
+
+    Returns:
+        bool: wether the named sync stage is blocked
+    '''
+
+    if stage not in ['preflight', 'eventupload', 'ruledownload', 'postflight']:
+        logging.warning(f'Checking if sync stage {stage} is blocked, but this is not a valid stage of the sync.')
+        return False
+
+    if stage not in ['eventupload', 'postflight']:
+        return False
+
+    return lookup_by_id('krampusinfo', 1)['block_' + stage]
+
 
 
 def lookup(collection: str, data: dict) -> list:
@@ -358,6 +405,28 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
         return {'data': rows, 'cursor': rows[-1]['row_id']}
     else:
         return {'data': rows}
+
+def unblock_sync(collection: str) -> tuple[int, str]:
+    '''
+    Unblocks either preflight or rule download stages of the sync, as the relevant collection is no longer being edited.
+
+    Parameters:
+        collection: name of the collection that should not be used for the sync
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    if collection == 'hostconfigs':
+        edit_fields('krampusinfo', {'block_preflight': False})
+        logging.info('Preflight unblocked.')
+        return 200, 'Unblocked Preflight'
+    elif collection == 'rules':
+        edit_fields('krampusinfo', {'block_ruledownload': False})
+        logging.info('Rule Download unblocked.')
+        return 200, 'Unblocked Rule download.'
+    else:
+        return 400, 'Invalid collection given to block sync.'
 
 
 # --------------------------------------------------------------------------------

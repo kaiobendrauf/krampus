@@ -57,6 +57,20 @@ def add(collection: str, data: dict) -> tuple[int, str]:
     return sqlalchemy_util.add(collection, data)
 
 
+def block_sync(collection: str) -> tuple[int, str]:
+    '''
+    Blocks either preflight or rule download stages of the sync, while the relevant collection is edited.
+
+    Parameters:
+        collection: name of the collection that should not be used for the sync
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    return sqlalchemy_util.block_sync(collection)
+
+
 def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]:
     '''
     Deletes data from the database that matches data given. For the "rules" collection, the datetime of the last delete action is stored 
@@ -113,6 +127,19 @@ def get_last_rule_delete() -> datetime:
     return sqlalchemy_util.get_last_rule_delete()
 
 
+def is_sync_stage_blocked(stage: str) -> bool:
+    '''
+    Check whether the named sync stage is blocked
+
+    Parameters:
+        stage: can be 'preflight', 'eventupload,' 'ruledownload', 'postflight'
+
+    Returns:
+        bool: wether the named sync stage is blocked
+    '''
+    return sqlalchemy_util.is_sync_stage_blocked(stage)
+
+    
 def lookup(collection: str, data: dict) -> list:
     '''
     Returns all rows in the collection matching the given data
@@ -183,4 +210,18 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
         dict: dict containing list of rules (key='rules') and optionally a cursor (key='cursor') if there is more data to read
     '''
     return sqlalchemy_util.read_new_rules(date, limit, cursor)
+
+
+def unblock_sync(collection: str) -> tuple[int, str]:
+    '''
+    Unblocks either preflight or rule download stages of the sync, as the relevant collection is no longer being edited.
+
+    Parameters:
+        collection: name of the collection that should not be used for the sync
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    return sqlalchemy_util.unblock_sync(collection)
 

@@ -117,10 +117,14 @@ def index():
 def preflight(machine_id):
     logging.debug(f'preflight for {machine_id}')
     if auth_sync.auth_sync(flask.request, machine_id):
-        data = get_request_data(flask.request)
-        result = process_preflight(machine_id, data)
-        # logging.debug(f'preflight result:\n{result}')
-        return flask.Response(json.dumps(result), mimetype='application/json')
+        if not db.is_sync_stage_blocked('preflight'):
+            data = get_request_data(flask.request)
+            result = process_preflight(machine_id, data)
+            # logging.debug(f'preflight result:\n{result}')
+            return flask.Response(json.dumps(result), mimetype='application/json')
+        else:
+            logging.debug('Sync stage blocked.')
+            flask.abort(flask.Response(status=503, headers=flask.Headers([('Retry-After', 300)])))
     else:
         logging.warning(f'Attempted sync request (preflight) from {machine_id} failed because authentication failed.')
         flask.abort(403)
@@ -145,15 +149,19 @@ def eventupload(machine_id):
 def ruledownload(machine_id):
     logging.debug(f'ruledownload for {machine_id}')
     if auth_sync.auth_sync(flask.request, machine_id):
-        data = get_request_data(flask.request)
-        machine_status = get_machine_status(machine_id)
-        if machine_status:
-            result = process_ruledownload(machine_id, machine_status, data)
-            # logging.debug(f'ruledownload result:\n{result}')
-            return flask.Response(json.dumps(result), mimetype='application/json')
+        if not db.is_sync_stage_blocked('ruledownload'):
+            data = get_request_data(flask.request)
+            machine_status = get_machine_status(machine_id)
+            if machine_status:
+                result = process_ruledownload(machine_id, machine_status, data)
+                # logging.debug(f'ruledownload result:\n{result}')
+                return flask.Response(json.dumps(result), mimetype='application/json')
+            else:
+                logging.warning(f'Attempted sync request (ruledownload) from {machine_id} failed because machine status for sync could not be found.')
+                flask.abort(404)
         else:
-            logging.warning(f'Attempted sync request (ruledownload) from {machine_id} failed because machine status for sync could not be found.')
-            flask.abort(404)
+            logging.debug('Sync stage blocked.')
+            flask.abort(flask.Response(status=503, headers=flask.Headers([('Retry-After', 300)])))
     else:
         logging.warning(f'Attempted sync request (ruledownload) from {machine_id} failed because authentication failed.')
         flask.abort(403)
@@ -191,6 +199,19 @@ def db_add(collection):
             return flask.Response(text, status=status_code, content_type='text/plain')
         else:
             flask.abort(415)
+    else:
+        logging.warning(f'Attempted db-add request failed because authentication failed.')
+        flask.abort(403)
+
+@server.route('/db-block-sync/<collection>', methods=['POST'])
+def db_block_sync(collection):
+    logging.debug(f'block request for {collection}')
+    if auth_ctl.auth_ctl(flask.request):
+        if collection in ['hostconfigs', 'rules']:
+            status_code, text = db.block_sync(collection)
+            return flask.Response(text, status=status_code, content_type='text/plain')
+        else:
+            return flask.Response('Invalid collection given.', status=400, content_type='text/plain')
     else:
         logging.warning(f'Attempted db-add request failed because authentication failed.')
         flask.abort(403)
@@ -266,6 +287,18 @@ def db_edit_fields(collection):
         logging.warning(f'Attempted db-edit request failed because authentication failed.')
         flask.abort(403)
 
+@server.route('/db-is_sync-blocked', methods=['POST'])
+def db_is_sync_blocked():
+    logging.debug(f'is sync blocked check request')
+    if auth_ctl.auth_ctl(flask.request):
+        d = {'preflight': None, 'ruledownload': None}
+        for stage in d:
+            d[stage] = db.is_sync_stage_blocked(stage)
+        return flask.Response(json.dumps(d), mimetype='application/json')
+    else:
+        logging.warning(f'Attempted db-add request failed because authentication failed.')
+        flask.abort(403)
+
 @server.route('/db-read/<collection>', methods=['POST'])
 def db_read(collection):
     logging.debug(f'read request for {collection}')
@@ -287,18 +320,18 @@ def db_read(collection):
         flask.abort(403)
 
 
-# @server.route('/db-get/<collection>/<i>', methods=['POST'])
-# def db_read(collection):
-#     logging.debug(f'get request for row {i} in {collection}')
-#     if auth_ctl.auth_ctl(flask.request):
-#         data = db.lookup_by_id(collection, i)
-#         if data:
-#             return data
-#         else:
-#             flask.abort(404)
-#     else:
-#         logging.warning(f'Attempted db-read request failed because authentication failed.')
-#         flask.abort(403)
+@server.route('/db-unblock-sync/<collection>', methods=['POST'])
+def db_unblock_sync(collection):
+    logging.debug(f'unblock request for {collection}')
+    if auth_ctl.auth_ctl(flask.request):
+        if collection in ['hostconfigs', 'rules']:
+            status_code, text = db.unblock_sync(collection)
+            return flask.Response(text, status=status_code, content_type='text/plain')
+        else:
+            return flask.Response('Invalid collection given.', status=400, content_type='text/plain')
+    else:
+        logging.warning(f'Attempted db-add request failed because authentication failed.')
+        flask.abort(403)
 
 # ----------------------------------------
 #          Listeners - auth

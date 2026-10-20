@@ -60,6 +60,20 @@ def add(collection: str, data: dict) -> tuple[int, str]:
     return sqlalchemy_util.add(collection, data)
 
 
+def block_sync(collection: str) -> tuple[int, str]:
+    '''
+    Blocks either preflight or rule download stages of the sync, while the relevant collection is edited.
+
+    Parameters:
+        collection: name of the collection that should not be used for the sync
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    return sqlalchemy_util.block_sync(collection)
+
+
 def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]:
     '''
     Deletes data from the database that matches data given. For the "rules" collection, the datetime of the last delete action is stored 
@@ -186,4 +200,18 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
         dict: dict containing list of rules (key='rules') and optionally a cursor (key='cursor') if there is more data to read
     '''
     return sqlalchemy_util.read_new_rules(date, limit, cursor)
+
+
+def unblock_sync(collection: str) -> tuple[int, str]:
+    '''
+    Unblocks either preflight or rule download stages of the sync, as the relevant collection is no longer being edited.
+
+    Parameters:
+        collection: name of the collection that should not be used for the sync
+
+    Returns:
+        int: http status code reflecting the success of the attempted action
+        str: description of action taken
+    '''
+    return sqlalchemy_util.unblock_sync(collection)
 

@@ -19,7 +19,7 @@ def auth_ctl(request):
         if auth.startswith('Bearer '):
             token = auth.removeprefix('Bearer ')
             try:
-                decode = jwt.decode(token, os.environ.get('JWT_SECRET'), options={'require': ['user', 'iat', 'exp']}, algorithms=["HS256"])
+                decode = jwt.decode(token, os.environ.get('JWT_SECRET'), options={'require': ['user', 'iat', 'exp']}, algorithms=['HS256'])
                 if decode['user'] == os.environ.get('JWT_USERNAME'):
                     if datetime.fromtimestamp(decode['iat']) + timedelta(minutes=minutes) == datetime.fromtimestamp(decode['exp']):
                         return True
@@ -37,6 +37,16 @@ def auth_sync(request, machine_id: str=None):
     return False
 
 def register(request):
+    '''
+    If applicable and the request is able to authenticate returns information needed for further authentication (eg a token)
+
+    Parameters:
+        request: flask request object
+
+    Returns:
+        dict: dict containing the needed information or description of action taken under 'msg' key
+        int: http status code reflecting the success of the attempted action
+    '''
     minutes = os.environ.get('JWT_EXP_MIN')
     if minutes is None:
         minutes = 5 
@@ -60,7 +70,7 @@ def register(request):
         'iat': datetime.now(timezone.utc),
         'exp': datetime.now(timezone.utc) + timedelta(minutes=minutes)}
 
-    access_token = jwt.encode(d, os.environ.get('JWT_SECRET'), algorithm="HS256")
+    access_token = jwt.encode(d, os.environ.get('JWT_SECRET'), algorithm='HS256')
     return {'access_token': access_token}, 200
  
 

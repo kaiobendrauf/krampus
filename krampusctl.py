@@ -10,6 +10,9 @@ import yaml
 
 from santa_classes import KrampusHostConfig, KrampusRule
 
+blocked=False
+blocked_collection=''
+
 # ----------------------------------------
 #          server requests
 # ----------------------------------------
@@ -33,13 +36,19 @@ def server_req(url, data, accepted_errors=[], fail_on_errors=[], debug_print=Tru
             logging.error(f'Error {req_result.status_code}. {req_result.text}')
             if debug_print:
                 logging.debug(data)
-            logging.error(f'Cannot continue.')
+            if blocked:
+                logging.error(f'Cannot continue.\nWARNING: syncs are currently blocked!\nPlease either manually unblock using `-u` or successfully edit the {blocked_collection} with krampusctl to unblock.')
+            else:
+                logging.error(f'Cannot continue.')
             sys.exit(1)
         else:
             logging.error(f'Error {req_result.status_code}. {req_result.text}')
             if debug_print:
                 logging.debug(data)
-    logging.error(f'Cannot continue.')
+    if blocked:
+        logging.error(f'Cannot continue.\nWARNING: syncs are currently blocked!\nPlease either manually unblock using `-u` or successfully edit the {blocked_collection} with krampusctl to unblock.')
+    else:
+        logging.error(f'Cannot continue.')
     sys.exit(1)
 
 # ----------------------------------------
@@ -84,23 +93,30 @@ def prep_auth(url):
 # ----------------------------------------
 def replicate(data, server_url, limit):
     for collection in data:
+        block_sync(server_url, collection)
         # read from db
         collection_data = data[collection]
         url = server_url + f'/db-read/{collection}'
         req_result = server_req(url, {'limit': limit})
         req_result = process_rep_response(req_result)
+        to_delete = []
         while 'cursor' in req_result:
             # still reading
             # process data (note data that does not need to be added, delete what needs to be deleted)
-            collection_data = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
+            collection_data, d = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
+            to_delete += d
             # get new data
             req_result = server_req(url, {'limit': limit, 'cursor': req_result['cursor']})
             req_result = process_rep_response(req_result)
         # process last data chunk
-        collection_data = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
+        collection_data, d = process_replicate_chunk(req_result['data'], collection_data, f'{server_url}/db-del/{collection}', f'{server_url}/db-edit-row/{collection}')
+        to_delete += d
         # for collection add all missing data
         for d in collection_data:
             server_req(f'{server_url}/db-add/{collection}', d, fail_on_errors=[409])
+        for d in to_delete:
+            server_req(f'{server_url}/db-del/{collection}', d, fail_on_errors=[404, 400])
+        unblock_sync(server_url, collection)
 
 def process_rep_response(req_res):
     # if request contains json
@@ -137,9 +153,9 @@ def process_replicate_chunk(response_data, data, del_url, edit_url):
                 server_req(edit_url, d, fail_on_errors=[404, 400])
 
     # old data with no matches needs to be deleted
-    for d in response_data:
-        server_req(del_url, d, fail_on_errors=[404, 400])
-    return new_data
+    # for d in response_data:
+    #     server_req(del_url, d, fail_on_errors=[404, 400])
+    return new_data, response_data
 
 def check_dict_to_database(database, d):
     if 'row_id' in d:
@@ -166,37 +182,47 @@ def is_dict_match(d1, d2):
 
 def add(data, server_url):
     for collection in data:
+        block_sync(server_url, collection)
         logging.debug(f'Adding to {collection}')
         for row in data[collection]:
             req_result = server_req(f'{server_url}/db-add/{collection}', row, fail_on_errors=[409])
+        unblock_sync(server_url, collection)
 
 def edit_row(data, server_url):
     for collection in data:
+        block_sync(server_url, collection)
         logging.debug(f'Editing {collection}')
         for row in data[collection]:
             if 'row_id' not in row:
                 logging.error(f'Can only edit rows with a known id. The following row in {collection} is missing an id:\n{row}')
                 sys.exit(1)
             server_req(f'{server_url}/db-edit-row/{collection}', row, fail_on_errors=[404])
+        unblock_sync(server_url, collection)
 
 def edit_fields(data, server_url):
     for collection in data:
+        block_sync(server_url, collection)
         logging.debug(f'Editing {collection}')
         for row in data[collection]:
             if 'row_id' not in row:
                 logging.error(f'Can only edit rows with a known id. The following row in {collection} is missing an id:\n{row}')
                 sys.exit(1)
             server_req(f'{server_url}/db-edit-fields/{collection}', row, fail_on_errors=[404])
+        unblock_sync(server_url, collection)
 
 def delete(data, server_url):
     for collection in data:
+        block_sync(server_url, collection)
         for row in data[collection]:
             req_result = server_req(f'{server_url}/db-del/{collection}', row, fail_on_errors=[400], accepted_errors=[404])
+        unblock_sync(server_url, collection)
 
 def delete_multiple(data, server_url):
     for collection in data:
+        block_sync(server_url, collection)
         for row in data[collection]:
             req_result = server_req(f'{server_url}/db-del-multiple/{collection}', row, accepted_errors=[404])
+        unblock_sync(server_url, collection)
 
 def check_hostconfigs(l, allow_partial=False):
     for row in l:
@@ -237,7 +263,7 @@ def check_rules(l, allow_partial=False):
         #     logging.error(f'Rule: {rule}')
         #     sys.exit(1)
 
-def write_yaml(yaml_file, server_url, limit):
+def write_output(yaml_file, server_url, limit):
     result = {}
     for collection in ['hostconfigs', 'rules']:
         collection_data = []
@@ -257,7 +283,16 @@ def write_yaml(yaml_file, server_url, limit):
         result[collection] = collection_data
     with open(yaml_file, 'w') as f:
         yaml.dump(result, f, default_flow_style=False)
-        
+
+
+def block_sync(server_url, collection):
+    server_req(f'{server_url}/db-block-sync/{collection}', None)
+    blocked = True
+    blocked_collection = collection
+
+def unblock_sync(server_url, collection):
+    server_req(f'{server_url}/db-unblock-sync/{collection}', None)
+    blocked = False
 
 # ----------------------------------------
 #                 File reader
@@ -356,27 +391,31 @@ def process_args():
                         help='removes matches for the given data from the database, with the assumption that exactly one match will be found.')
     parser.add_argument('--delete_multiple', dest='del_path_m',
                            help='removes all matches for the given data from the database, with the assumption that at least one match will be found.')
+    parser.add_argument('--is_sync_blocked', '-b', dest='is_sync_blocked', action='store_true',
+                           help='checks wether any part of the sync is currently blocked.')
     parser.add_argument('--limit', '-l', dest='limit', default=50,
                         help='limit for reading from database', type=int)
     parser.add_argument('--output_yaml', '-o', dest='out_path',
                         help='path where a yaml file will be written to reflect the current rules and hostconfigs in krampus.')
     parser.add_argument('--server', '-s', dest='server_url', default="http://0.0.0.0:8000",
                         help='krampus url')
+    parser.add_argument('--unblock', '-u', dest='unblock', action='store_true',
+                        help='unblock syncs')
     args = parser.parse_args()
-    return args.rep_path, args.add_path, args.edit_row_path, args.edit_fields_path, args.del_path, args.del_path_m, args.limit, args.server_url, args.out_path
+    return args.rep_path, args.add_path, args.edit_row_path, args.edit_fields_path, args.del_path, args.del_path_m, args.limit, args.server_url, args.out_path, args.unblock, args.is_sync_blocked
 
 # ----------------------------------------
 #                 Main
 # ----------------------------------------
 def main():
     setup_logging()
-    rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, limit, server_url, out_path = process_args()
+    rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, limit, server_url, out_path, unblock, is_sync_blocked = process_args()
 
-    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m].count(None) < 4:
+    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, unblock].count(None) < 5:
         logging.error(f'Please only use one argument that edits the krampus database.')
         sys.exit(1)
 
-    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, out_path].count(None) > 1:
+    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, out_path, unblock, is_sync_blocked].count(None) > 1:
         prep_auth(server_url)
 
     if rep_path is not None:
@@ -398,7 +437,23 @@ def main():
         data = read_input_file(del_path_m, True)
         delete_multiple(data, server_url)
     if out_path is not None:
-        write_yaml(out_path, server_url, limit)
+        write_output(out_path, server_url, limit)
+    if unblock:
+        for collection in ['rules', 'hostconfigs']:
+            unblock_sync(server_url, collection)
+
+    if blocked:
+        logging.error('WARNING: sync is currently blocked.\n\nPlease check the database if needed and manually unblock using `-u`.')
+        sys.exit(1)
+
+    logging.debug('Checking if sync is blocked.')
+    data = server_req(f'{server_url}/db-is_sync-blocked', None)
+    data = process_rep_response(data)
+    if data['preflight'] or is_sync_blocked:
+        print(f'{"WARNING! " if data['preflight'] else ""}Preflight is {"" if data['preflight'] else "not "}blocked.')
+    if data['ruledownload'] or is_sync_blocked:
+        print(f'{"WARNING! " if data['ruledownload'] else ""}Rule download is {"" if data['ruledownload'] else "not "}blocked.')
+
 
 if __name__ == '__main__':
     main()
