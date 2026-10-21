@@ -85,10 +85,14 @@ def validate_data(collection, data):
 def setup_event_handler():
     global event_handler
     setup_data = None
-    if os.environ.get('PUB_SUB_TOPIC_ID'):
+    if os.environ.get('PUB_SUB_TOPIC_ID') is not None:
         # pub sub event handler
         logging.info("Using Pub/Sub as the event handler.")
         import event_handlers.event_handler_pubsub as event_handler
+    elif os.environ.get('WEBHOOK_URL') is not None:
+        # webhook event handler
+        logging.info("Using webhook as the event handler.")
+        import event_handlers.event_handler_webhook as event_handler
     else:
         # no event handler
         logging.warning(f'No event handler found. Events will not be processed.')
