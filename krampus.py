@@ -84,7 +84,6 @@ def validate_data(collection, data):
 # ----------------------------------------
 def setup_event_handler():
     global event_handler
-    setup_data = None
     if os.environ.get('PUB_SUB_TOPIC_ID') is not None:
         # pub sub event handler
         logging.info("Using Pub/Sub as the event handler.")
@@ -98,7 +97,7 @@ def setup_event_handler():
         logging.warning(f'No event handler found. Events will not be processed.')
         import event_handlers.event_handler_empty as event_handler
 
-    event_handler.setup(setup_data)
+    event_handler.setup()
 
 # ----------------------------------------
 #          Listeners - Generic

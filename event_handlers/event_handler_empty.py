@@ -4,7 +4,7 @@
 def send_events(data: list):
     return 
 
-def setup(_):
+def setup():
     return
 
 # --------------------------------------------------------------------------------

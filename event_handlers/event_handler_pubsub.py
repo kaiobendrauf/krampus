@@ -14,7 +14,7 @@ publisher = pubsub_v1.PublisherClient()
 def send_events(data: list):
     publish_futures = []
     for event in data:
-        event = json.dumps(event)
+        event = json.dumps({'events': event})
         # When you publish a message, the client returns a future.
         publish_future = publisher.publish(topic_path, event.encode('utf-8'))
         # Non-blocking. Publish failures are handled in the callback function.
@@ -27,7 +27,7 @@ def send_events(data: list):
     print(f'Published messages with error handler to {topic_path}.')
 
 
-def setup(_):
+def setup():
     logging.debug("Running pubsub setup")
     # Sets up the Pub/Sub connection, checking that environmental variables 'PUB_SUB_PROJ_ID' 'PUB_SUB_TOPIC_ID' and are found
     project_id = os.environ.get('PUB_SUB_PROJ_ID')

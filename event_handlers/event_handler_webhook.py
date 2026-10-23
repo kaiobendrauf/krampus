@@ -17,7 +17,7 @@ def send_events(data: list):
             logging.error(f'Error with webhook event handling.\nStatus code: {req_result.status_code} - {req_result.text}')
 
 
-def setup(_):
+def setup():
     if os.environ.get('WEBHOOK_URL') is None:
         logging.error('A webhook url is required to use the webhook event handler. Please add this as the environmental variable "WEBHOOK_URL".')
         sys.exit(1)
