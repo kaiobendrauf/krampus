@@ -26,7 +26,7 @@ def setup():
     logging.debug(f"Successfully created Firestore client in GCP project: {db.project}")
 
     if lookup_by_id('krampusinfo', '1') is None:
-        db.collection('krampusinfo').document('1').set({'last_rule_delete': datetime.now(timezone.utc), 'block_preflight': False, 'block_ruledownload': False})
+        db.collection('krampusinfo').document('1').set({'last_rule_delete': datetime.now(timezone.utc), 'block_sync': False})
 
 
 def add(collection: str, data: dict) -> tuple[int, str]:
@@ -57,27 +57,17 @@ def add(collection: str, data: dict) -> tuple[int, str]:
     return 200, f'Entry added to {collection} with row_id {data['row_id']}'
 
 
-def block_sync(collection: str) -> tuple[int, str]:
+def block_sync() -> tuple[int, str]:
     '''
-    Blocks either preflight or rule download stages of the sync, while the relevant collection is edited.
-
-    Parameters:
-        collection: name of the collection that should not be used for the sync
+    Blocks the sync while the relevant collection is edited.
 
     Returns:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    if collection == 'hostconfigs':
-        edit_fields('krampusinfo', {'block_preflight': True})
-        logging.info('Preflight blocked.')
-        return 200, 'Blocked Preflight'
-    elif collection == 'rules':
-        edit_fields('krampusinfo', {'block_ruledownload': True})
-        logging.info('Rule Download blocked.')
-        return 200, 'Rule download blocked.'
-    else:
-        return 400, 'Invalid collection given to block sync.'
+    edit_fields('krampusinfo', {'block_sync': True})
+    logging.info('Sync blocked.')
+    return 200, 'Blocked sync'
 
 
 def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]:
@@ -170,25 +160,14 @@ def get_last_rule_delete() -> datetime:
         return doc['last_rule_delete']
 
 
-def is_sync_stage_blocked(stage: str) -> bool:
+def is_sync_blocked() -> bool:
     '''
-    Check whether the named sync stage is blocked
-
-    Parameters:
-        stage: can be 'preflight', 'eventupload,' 'ruledownload', 'postflight'
+    Check whether the sync is blocked
 
     Returns:
-        bool: whether the named sync stage is blocked
+        bool: whether the named sync is blocked
     '''
-
-    if stage not in ['preflight', 'eventupload', 'ruledownload', 'postflight']:
-        logging.warning(f'Checking if sync stage {stage} is blocked, but this is not a valid stage of the sync.')
-        return False
-
-    if stage not in ['eventupload', 'postflight']:
-        return False
-
-    return lookup_by_id('krampusinfo', '1')['block_' + stage]
+    return lookup_by_id('krampusinfo', '1')['block_sync' + stage]
 
 
 def lookup(collection: str, data: dict) -> list:
@@ -296,27 +275,17 @@ def read_new_rules(date: datetime, limit: int, cursor = None) -> dict:
         return {'data': docs}
 
 
-def unblock_sync(collection: str) -> tuple[int, str]:
+def unblock_sync() -> tuple[int, str]:
     '''
-    Unblocks either preflight or rule download stages of the sync, as the relevant collection is no longer being edited.
-
-    Parameters:
-        collection: name of the collection that should not be used for the sync
+    Unblocks the sync, as the database is no longer being edited.
 
     Returns:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    if collection == 'hostconfigs':
-        edit_fields('krampusinfo', {'block_preflight': False})
-        logging.info('Preflight unblocked.')
-        return 200, 'Unblocked Preflight'
-    elif collection == 'rules':
-        edit_fields('krampusinfo', {'block_ruledownload': False})
-        logging.info('Rule Download unblocked.')
-        return 200, 'UnblockedRule download.'
-    else:
-        return 400, 'Invalid collection given to block sync.'
+    edit_fields('krampusinfo', {'block_sync': False})
+    logging.info('Sync unblocked.')
+    return 200, 'Unblocked sync'
 
 # --------------------------------------------------------------------------------
 #                                Helper Functions

@@ -10,7 +10,6 @@ import yaml
 from santa_classes import KrampusHostConfig, KrampusRule
 
 blocked=False
-blocked_collection=''
 
 # ----------------------------------------
 #          server requests
@@ -92,7 +91,6 @@ def prep_auth(url):
 # ----------------------------------------
 def replicate(data, server_url, limit):
     for collection in data:
-        block_sync(server_url, collection)
         # read from db
         collection_data = data[collection]
         url = server_url + f'/db-read/{collection}'
@@ -115,7 +113,6 @@ def replicate(data, server_url, limit):
             server_req(f'{server_url}/db-add/{collection}', d, fail_on_errors=[409])
         for d in to_delete:
             server_req(f'{server_url}/db-del/{collection}', d, fail_on_errors=[404, 400])
-        unblock_sync(server_url, collection)
 
 def process_rep_response(req_res):
     # if request contains json
@@ -181,47 +178,37 @@ def is_dict_match(d1, d2):
 
 def add(data, server_url):
     for collection in data:
-        block_sync(server_url, collection)
         logging.debug(f'Adding to {collection}')
         for row in data[collection]:
             req_result = server_req(f'{server_url}/db-add/{collection}', row, fail_on_errors=[409])
-        unblock_sync(server_url, collection)
 
 def edit_row(data, server_url):
     for collection in data:
-        block_sync(server_url, collection)
         logging.debug(f'Editing {collection}')
         for row in data[collection]:
             if 'row_id' not in row:
                 logging.error(f'Can only edit rows with a known id. The following row in {collection} is missing an id:\n{row}')
                 sys.exit(1)
             server_req(f'{server_url}/db-edit-row/{collection}', row, fail_on_errors=[404])
-        unblock_sync(server_url, collection)
 
 def edit_fields(data, server_url):
     for collection in data:
-        block_sync(server_url, collection)
         logging.debug(f'Editing {collection}')
         for row in data[collection]:
             if 'row_id' not in row:
                 logging.error(f'Can only edit rows with a known id. The following row in {collection} is missing an id:\n{row}')
                 sys.exit(1)
             server_req(f'{server_url}/db-edit-fields/{collection}', row, fail_on_errors=[404])
-        unblock_sync(server_url, collection)
 
 def delete(data, server_url):
     for collection in data:
-        block_sync(server_url, collection)
         for row in data[collection]:
             req_result = server_req(f'{server_url}/db-del/{collection}', row, fail_on_errors=[400], accepted_errors=[404])
-        unblock_sync(server_url, collection)
 
 def delete_multiple(data, server_url):
     for collection in data:
-        block_sync(server_url, collection)
         for row in data[collection]:
             req_result = server_req(f'{server_url}/db-del-multiple/{collection}', row, accepted_errors=[404])
-        unblock_sync(server_url, collection)
 
 def check_hostconfigs(l, allow_partial=False):
     for row in l:
@@ -284,13 +271,12 @@ def write_output(yaml_file, server_url, limit):
         yaml.dump(result, f, default_flow_style=False)
 
 
-def block_sync(server_url, collection):
-    server_req(f'{server_url}/db-block-sync/{collection}', None)
+def block_sync(server_url):
+    server_req(f'{server_url}/db-block-sync', None)
     blocked = True
-    blocked_collection = collection
 
 def unblock_sync(server_url, collection):
-    server_req(f'{server_url}/db-unblock-sync/{collection}', None)
+    server_req(f'{server_url}/db-unblock-sync/', None)
     blocked = False
 
 # ----------------------------------------
@@ -417,6 +403,9 @@ def main():
     if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, out_path, unblock, is_sync_blocked].count(None) > 1:
         prep_auth(server_url)
 
+    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m].count(None) > 1:
+        block_sync(server_url)
+
     if rep_path is not None:
         data = read_input_file(rep_path, False)
         replicate(data, server_url, limit)
@@ -438,8 +427,10 @@ def main():
     if out_path is not None:
         write_output(out_path, server_url, limit)
     if unblock:
-        for collection in ['rules', 'hostconfigs']:
-            unblock_sync(server_url, collection)
+        unblock_sync(server_url)
+
+    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m].count(None) > 1:
+        unblock_sync(server_url)
 
     if blocked:
         logging.error('WARNING: sync is currently blocked.\n\nPlease check the database if needed and manually unblock using `-u`.')
@@ -448,10 +439,8 @@ def main():
     logging.debug('Checking if sync is blocked.')
     data = server_req(f'{server_url}/db-is_sync-blocked', None)
     data = process_rep_response(data)
-    if data['preflight'] or is_sync_blocked:
-        print(f'{"WARNING! " if data['preflight'] else ""}Preflight is {"" if data['preflight'] else "not "}blocked.')
-    if data['ruledownload'] or is_sync_blocked:
-        print(f'{"WARNING! " if data['ruledownload'] else ""}Rule download is {"" if data['ruledownload'] else "not "}blocked.')
+    if data['blocked'] or is_sync_blocked:
+        print(f'{"WARNING! " if data['blocked'] else ""}Sync is {"" if data['blocked'] else "not "}blocked.')
 
 
 if __name__ == '__main__':
