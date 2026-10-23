@@ -75,7 +75,7 @@ def register(request):
     return {'access_token': access_token}, 200
  
 
-def setup(is_ctl: bool, data=None):
+def setup(is_ctl: bool):
     # Sets up authentication for either krampusctl or the syncs, based on the is_ctl variable
     if is_ctl:
         for s in ['JWT_USERNAME', 'JWT_PASSWORD', 'JWT_SECRET']:

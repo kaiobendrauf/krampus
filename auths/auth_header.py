@@ -26,7 +26,7 @@ def register(request):
     '''
     return {'msg':'No registration required'}, 200
 
-def setup(is_ctl: bool, data=None):
+def setup(is_ctl: bool):
     # Sets up authentication for either krampusctl or the syncs, based on the is_ctl variable
     if is_ctl:
         if os.environ.get('CTL_SECRET') is None:

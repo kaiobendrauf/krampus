@@ -27,28 +27,25 @@ def setup_auth():
 
 def setup_sync_auth():
     global auth_sync
-    setup_data = None
     if os.environ.get('SYNC_SECRET') is not None:
         # header auth
         import auths.auth_header as auth_sync
     else:
         logging.info('No valid authentication for syncs defined.')
         import auths.auth_empty as auth_sync
-    auth_sync.setup(False, setup_data)
+    auth_sync.setup(False)
 
 def setup_ctl_auth():
     global auth_ctl
-    setup_data = None
     if os.environ.get('CTL_SECRET') is not None:
         # header auth
         import auths.auth_header as auth_ctl
     elif os.environ.get('JWT_SECRET') is not None:
         import auths.auth_jwt as auth_ctl
-        setup_data = server
     else:
         logging.warning('No valid authentication for krampusctl defined. Make sure you are authenticating elsewhere.')
         import auths.auth_empty as auth_ctl
-    auth_ctl.setup(True, setup_data)
+    auth_ctl.setup(True)
 
 
 # ----------------------------------------
