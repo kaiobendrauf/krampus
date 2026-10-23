@@ -35,7 +35,7 @@ def server_req(url, data, accepted_errors=[], fail_on_errors=[], debug_print=Tru
             if debug_print:
                 logging.debug(data)
             if blocked:
-                logging.error(f'Cannot continue.\nWARNING: syncs are currently blocked!\nPlease either manually unblock using `-u` or successfully edit the {blocked_collection} with krampusctl to unblock.')
+                logging.error(f'Cannot continue.\nWARNING: syncs are currently blocked!\nPlease either manually unblock using `-u` or successfully edit the database with krampusctl to unblock.')
             else:
                 logging.error(f'Cannot continue.')
             sys.exit(1)
@@ -44,7 +44,7 @@ def server_req(url, data, accepted_errors=[], fail_on_errors=[], debug_print=Tru
             if debug_print:
                 logging.debug(data)
     if blocked:
-        logging.error(f'Cannot continue.\nWARNING: syncs are currently blocked!\nPlease either manually unblock using `-u` or successfully edit the {blocked_collection} with krampusctl to unblock.')
+        logging.error(f'Cannot continue.\nWARNING: syncs are currently blocked!\nPlease either manually unblock using `-u` or successfully edit the database with krampusctl to unblock.')
     else:
         logging.error(f'Cannot continue.')
     sys.exit(1)
@@ -273,10 +273,12 @@ def write_output(yaml_file, server_url, limit):
 
 def block_sync(server_url):
     server_req(f'{server_url}/db-block-sync', None)
+    global blocked
     blocked = True
 
-def unblock_sync(server_url, collection):
-    server_req(f'{server_url}/db-unblock-sync/', None)
+def unblock_sync(server_url):
+    server_req(f'{server_url}/db-unblock-sync', None)
+    global blocked
     blocked = False
 
 # ----------------------------------------
@@ -403,7 +405,7 @@ def main():
     if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, out_path, unblock, is_sync_blocked].count(None) > 1:
         prep_auth(server_url)
 
-    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m].count(None) > 1:
+    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m].count(None) < 6:
         block_sync(server_url)
 
     if rep_path is not None:
@@ -429,14 +431,13 @@ def main():
     if unblock:
         unblock_sync(server_url)
 
-    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m].count(None) > 1:
+    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m].count(None) < 6:
         unblock_sync(server_url)
 
     if blocked:
         logging.error('WARNING: sync is currently blocked.\n\nPlease check the database if needed and manually unblock using `-u`.')
         sys.exit(1)
 
-    logging.debug('Checking if sync is blocked.')
     data = server_req(f'{server_url}/db-is_sync-blocked', None)
     data = process_rep_response(data)
     if data['blocked'] or is_sync_blocked:

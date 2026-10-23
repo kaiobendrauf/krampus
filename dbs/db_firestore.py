@@ -65,7 +65,7 @@ def block_sync() -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    edit_fields('krampusinfo', {'block_sync': True})
+    edit_fields('krampusinfo', {'row_id': '1', 'block_sync': True})
     logging.info('Sync blocked.')
     return 200, 'Blocked sync'
 
@@ -167,7 +167,7 @@ def is_sync_blocked() -> bool:
     Returns:
         bool: whether the named sync is blocked
     '''
-    return lookup_by_id('krampusinfo', '1')['block_sync' + stage]
+    return lookup_by_id('krampusinfo', '1')['block_sync']
 
 
 def lookup(collection: str, data: dict) -> list:
@@ -283,7 +283,7 @@ def unblock_sync() -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    edit_fields('krampusinfo', {'block_sync': False})
+    edit_fields('krampusinfo', {'row_id': '1', 'block_sync': False})
     logging.info('Sync unblocked.')
     return 200, 'Unblocked sync'
 

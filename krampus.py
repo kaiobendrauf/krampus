@@ -376,7 +376,6 @@ def process_preflight(machine_id, data):
         machine_status = {'machine_id': machine_id}
         new = True
     choose_sync_type(data, machine_status, hostconfig, new)
-    # machine_status['stage'] = 'preflight'
     if 'primary_user_groups' in data:
         machine_status['primary_user_groups'] = data['primary_user_groups']
     else:

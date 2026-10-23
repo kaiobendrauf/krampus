@@ -65,7 +65,7 @@ def block_sync() -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    return sqlalchemy_util.block_sync(collection)
+    return sqlalchemy_util.block_sync()
 
 
 def delete(collection: str, data: dict, multiple: bool=False) -> tuple[int, str]:
@@ -129,7 +129,7 @@ def is_sync_blocked() -> bool:
     Check whether the sync is blocked
 
     Returns:
-        bool: whether the named sync stage is blocked
+        bool: whether the sync is blocked
     '''
     return sqlalchemy_util.is_sync_blocked()
 
@@ -214,5 +214,5 @@ def unblock_sync() -> tuple[int, str]:
         int: http status code reflecting the success of the attempted action
         str: description of action taken
     '''
-    return sqlalchemy_util.unblock_sync(collection)
+    return sqlalchemy_util.unblock_sync()
 
