@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
 import logging
 import os
 import requests
@@ -80,7 +79,7 @@ def prep_auth(url):
             if 'access_token' in req_result:
                 global jwt_token
                 jwt_token = req_result['access_token']
-                logging.info('JWT Authenication Successful.')
+                logging.info('JWT Authentication Successful.')
             else:
                 logging.error(f'Register failed to return an access token.')
                 sys.exit(1)
@@ -392,7 +391,7 @@ def process_args():
     parser.add_argument('--delete_multiple', dest='del_path_m',
                            help='removes all matches for the given data from the database, with the assumption that at least one match will be found.')
     parser.add_argument('--is_sync_blocked', '-b', dest='is_sync_blocked', action='store_true',
-                           help='checks wether any part of the sync is currently blocked.')
+                           help='checks whether any part of the sync is currently blocked.')
     parser.add_argument('--limit', '-l', dest='limit', default=50,
                         help='limit for reading from database', type=int)
     parser.add_argument('--output_yaml', '-o', dest='out_path',

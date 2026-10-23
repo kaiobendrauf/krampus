@@ -25,15 +25,15 @@ def auth_ctl(request):
                     if datetime.fromtimestamp(decode['iat']) + timedelta(minutes=int(minutes)) == datetime.fromtimestamp(decode['exp']):
                         return True
                     else:
-                        logging.warning('JWT authentication failed becasue unexpected iat or exp.')
+                        logging.warning('JWT authentication failed because unexpected iat or exp.')
                 else:
-                        logging.warning('JWT authentication failed becasue unknown username.')
+                        logging.warning('JWT authentication failed because unknown username.')
             except Exception as e:
                 logging.warning(f'JWT authentication failed with error {e}')
     return False
 
 
-def auth_sync(request, machine_id: str=None):
+def auth_sync(request, machine_id: str | None = None):
     # Given a request and optionally a machine_id, returns True if the sync request can be authenticated
     return False
 
@@ -80,10 +80,10 @@ def setup(is_ctl: bool, data=None):
     if is_ctl:
         for s in ['JWT_USERNAME', 'JWT_PASSWORD', 'JWT_SECRET']:
             if os.environ.get(s) is None:
-                logging.error(f'Trying to set up header as authentication but missing environ variable {s}')
+                logging.error(f'Trying to set up header as authentication but missing environmental variable {s}')
                 sys.exit(1)
         if os.environ.get('JWT_EXP_MIN') is None:
-            logging.warning('No envorinment variable `JWT_EXP_MIN` given. Using default of 5.')
+            logging.warning('No environment variable `JWT_EXP_MIN` given. Using default of 5.')
     else:
         logging.error(f'JWT authentication only supports authenticating krampusctl, you cannot authenticate santa sync requests with this authentication type.')
         sys.exit(1)

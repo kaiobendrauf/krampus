@@ -251,6 +251,7 @@ def edit_row(collection: str, data: dict) -> tuple[int, str]:
     delete('lists', {'linked_table': collection, 'linked_id': data['row_id']}, True)
     return edit_fields(collection, data)
 
+
 def get_last_rule_delete() -> datetime:
     # Gets the datetime the last delete action is stored, returns time of database creation if no deletion has ever occurred
     row = lookup_by_id('krampusinfo', 1)

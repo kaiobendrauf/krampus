@@ -178,7 +178,7 @@ def is_sync_stage_blocked(stage: str) -> bool:
         stage: can be 'preflight', 'eventupload,' 'ruledownload', 'postflight'
 
     Returns:
-        bool: wether the named sync stage is blocked
+        bool: whether the named sync stage is blocked
     '''
 
     if stage not in ['preflight', 'eventupload', 'ruledownload', 'postflight']:

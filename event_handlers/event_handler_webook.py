@@ -1,16 +1,20 @@
+import logging
+import os
 import requests
+import sys
+
 
 # --------------------------------------------------------------------------------
 #                                Required Functions
 # --------------------------------------------------------------------------------
 def send_events(data: list):
-	webhook_url = os.environ.get('WEBHOOK_URL')
-	for i in range(3):
-		req_result = requests.post(webhook_url, json=data)
+    webhook_url = os.environ.get('WEBHOOK_URL')
+    for i in range(3):
+        req_result = requests.post(webhook_url, json=data)
         if req_result.status_code < 300:
-        	return
+            return
         else:
-        	logging.error(f'Error with webhook event handling.\nStatus code: {req_result.status_code} - {req_result.text}')
+            logging.error(f'Error with webhook event handling.\nStatus code: {req_result.status_code} - {req_result.text}')
 
 
 def setup(_):

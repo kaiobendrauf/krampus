@@ -130,6 +130,19 @@ def get_last_rule_delete() -> datetime:
     return sqlalchemy_util.get_last_rule_delete()
 
 
+def is_sync_stage_blocked(stage: str) -> bool:
+    '''
+    Check whether the named sync stage is blocked
+
+    Parameters:
+        stage: can be 'preflight', 'eventupload,' 'ruledownload', 'postflight'
+
+    Returns:
+        bool: whether the named sync stage is blocked
+    '''
+    return sqlalchemy_util.is_sync_stage_blocked(stage)
+
+
 def lookup(collection: str, data: dict) -> list:
     '''
     Returns all rows in the collection matching the given data
