@@ -124,7 +124,9 @@ def preflight(machine_id):
             return flask.Response(json.dumps(result), mimetype='application/json')
         else:
             logging.debug('Sync blocked.')
-            flask.abort(flask.Response(status=503, headers=flask.Headers([('Retry-After', 300)])))
+            r = flask.Response(status=503)
+            r.headers['Retry-After'] = 300
+            flask.abort(r)
     else:
         logging.warning(f'Attempted sync request (preflight) from {machine_id} failed because authentication failed.')
         flask.abort(403)
@@ -161,7 +163,9 @@ def ruledownload(machine_id):
                 flask.abort(404)
         else:
             logging.debug('Sync blocked.')
-            flask.abort(flask.Response(status=503, headers=flask.Headers([('Retry-After', 300)])))
+            r = flask.Response(status=503)
+            r.headers['Retry-After'] = 300
+            flask.abort(r)
     else:
         logging.warning(f'Attempted sync request (ruledownload) from {machine_id} failed because authentication failed.')
         flask.abort(403)

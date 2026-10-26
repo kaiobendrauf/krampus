@@ -12,6 +12,7 @@ publisher = pubsub_v1.PublisherClient()
 #                                Required Functions
 # --------------------------------------------------------------------------------
 def send_events(data: list):
+    # Sends events onwards to be processed
     publish_futures = []
     for event in data:
         event = json.dumps({'events': event})
@@ -28,6 +29,7 @@ def send_events(data: list):
 
 
 def setup():
+    # Sets up event handling and checks any relevant environmental variables
     logging.debug("Running pubsub setup")
     # Sets up the Pub/Sub connection, checking that environmental variables 'PUB_SUB_PROJ_ID' 'PUB_SUB_TOPIC_ID' and are found
     project_id = os.environ.get('PUB_SUB_PROJ_ID')
