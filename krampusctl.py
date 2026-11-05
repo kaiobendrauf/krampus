@@ -348,15 +348,37 @@ def check_valid_yaml_dict(data, allow_partial):
                 sys.exit(1)
 
 # ----------------------------------------
+#           Dictionary Handling
+# ----------------------------------------
+
+def merge_data_dicts(dict1, dict2) -> dict:
+    result = dict1.copy()
+    for collection, value in dict2.items():
+        if isinstance(result[collection], list) and isinstance(value, list):
+            result[collection] = result[collection] + value
+        else:
+            logging.error(f"Mismatched types found when merging collection {collection}: {type(result[collection])}, {type(value)}")
+            raise TypeError
+    return result
+
+# ----------------------------------------
 #                 Logging
 # ----------------------------------------
 def setup_logging():
     # read logging level from env
     logging.basicConfig(
-        level=logging.DEBUG,
         format='%(asctime)s - %(levelname)s (%(module)s): %(message)s',
         datefmt='%d/%m/%Y %H:%M:%S',
         stream=sys.stdout)
+    log_level = os.environ.get('KRAMPUSCTL_LOG_LEVEL', 'INFO').upper()
+    if log_level != 'INFO':
+        logging.info(f'Log level set to "{log_level}"')
+    try:
+        logging.root.setLevel(log_level)
+    except ValueError:
+        logging.error(f'Invalid log level "{log_level}". Falling back to "INFO" level.')
+        logging.root.setLevel(logging.INFO)
+
 
 # ----------------------------------------
 #                 Options
@@ -366,72 +388,97 @@ def process_args():
 		description='krampusctl is a command-line tool for applying configuration to a krampus server.',
 		usage='%(prog)s [options]'
 	)
-    parser.add_argument('--apply', '-a', dest='rep_path',
-                        help='for each collection, copy this data to the database')
-    parser.add_argument('--add', dest='add_path',
-                        help='add this data to the database, without creating duplicates')
-    parser.add_argument('--edit_fields', dest='edit_fields_path',
-                        help='edits specific fields in the data in the database at a specific row id, with the assumption that it exists')
-    parser.add_argument('--edit_rows', dest='edit_row_path',
-                        help='fully replace the data in the database at a specific id, with the assumption that it exists')
-    parser.add_argument('--delete', '-d', dest='del_path',
-                        help='removes matches for the given data from the database, with the assumption that exactly one match will be found.')
-    parser.add_argument('--delete_multiple', dest='del_path_m',
-                           help='removes all matches for the given data from the database, with the assumption that at least one match will be found.')
+    parser.add_argument('--apply', '-a', action='append', dest='rep_paths', default=[],
+                        help='for each collection, copy this data to the database. Can be supplied multiple times for multiple files.')
+    parser.add_argument('--add', action='append', dest='add_paths', default=[],
+                        help='add this data to the database, without creating duplicates. Can be supplied multiple times for multiple files.')
+    parser.add_argument('--edit_fields', action='append', dest='edit_fields_paths', default=[],
+                        help='edits specific fields in the data in the database at a specific row id, with the assumption that it exists. Can be supplied multiple times for multiple files.')
+    parser.add_argument('--edit_rows', action='append', dest='edit_row_paths', default=[],
+                        help='fully replace the data in the database at a specific id, with the assumption that it exists. Can be supplied multiple times for multiple files.')
+    parser.add_argument('--delete', '-d', action='append', dest='del_paths', default=[],
+                        help='removes matches for the given data from the database, with the assumption that exactly one match will be found. Can be supplied multiple times for multiple files.')
+    parser.add_argument('--delete_multiple', action='append', dest='del_path_ms', default=[],
+                           help='removes all matches for the given data from the database, with the assumption that at least one match will be found. Can be supplied multiple times for multiple files.')
     parser.add_argument('--is_sync_blocked', '-b', dest='is_sync_blocked', action='store_true',
                            help='checks whether any part of the sync is currently blocked.')
     parser.add_argument('--limit', '-l', dest='limit', default=50,
                         help='limit for reading from database', type=int)
     parser.add_argument('--output_yaml', '-o', dest='out_path',
                         help='path where a yaml file will be written to reflect the current rules and hostconfigs in krampus.')
-    parser.add_argument('--server', '-s', dest='server_url', default="http://0.0.0.0:8000",
+    parser.add_argument('--server', '-s', dest='server_url',
                         help='krampus url')
     parser.add_argument('--unblock', '-u', dest='unblock', action='store_true',
                         help='unblock syncs')
     args = parser.parse_args()
-    return args.rep_path, args.add_path, args.edit_row_path, args.edit_fields_path, args.del_path, args.del_path_m, args.limit, args.server_url, args.out_path, args.unblock, args.is_sync_blocked
+
+    server_url = args.server_url
+    if not server_url and os.environ.get('KRAMPUSCTL_SERVER_URL'):
+        server_url = os.environ.get('KRAMPUSCTL_SERVER_URL')
+    elif not server_url:
+        server_url = 'http://127.0.0.1:8000'
+
+    return args.rep_paths, args.add_paths, args.edit_row_paths, args.edit_fields_paths, args.del_paths, args.del_path_ms, args.limit, server_url, args.out_path, args.unblock, args.is_sync_blocked
 
 # ----------------------------------------
 #                 Main
 # ----------------------------------------
 def main():
     setup_logging()
-    rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, limit, server_url, out_path, unblock, is_sync_blocked = process_args()
+    rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms, limit, server_url, out_path, unblock, is_sync_blocked = process_args()
 
-    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, unblock].count(None) < 5:
+    if [rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms, unblock].count([]) < 5:
         logging.error(f'Please only use one argument that edits the krampus database.')
         sys.exit(1)
 
-    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m, out_path, unblock, is_sync_blocked].count(None) > 1:
+    if [rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms, out_path, unblock, is_sync_blocked].count(None) > 1:
         prep_auth(server_url)
 
-    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m].count(None) < 6:
+    if [rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms].count(None) < 6:
         block_sync(server_url)
 
-    if rep_path is not None:
-        data = read_input_file(rep_path, False)
-        replicate(data, server_url, limit)
-    if add_path is not None:
-        data = read_input_file(add_path, False)
-        add(data, server_url)
-    if edit_row_path is not None:
-        data = read_input_file(edit_row_path, False)
-        edit_row(data, server_url)
-    if edit_fields_path is not None:
-        data = read_input_file(edit_fields_path, True)
-        edit_fields(data, server_url)
-    if del_path is not None:
-        data = read_input_file(del_path, True)
-        delete(data, server_url)
-    if del_path_m is not None:
-        data = read_input_file(del_path_m, True)
-        delete_multiple(data, server_url)
+    if len(rep_paths) > 0:
+        total_data = dict()
+        for path in rep_paths:
+            data = read_input_file(path, False)
+            total_data = merge_data_dicts(total_data, data)
+        replicate(total_data, server_url, limit)
+    if add_paths is not None:
+        total_data = dict()
+        for path in add_paths:
+            data = read_input_file(path, False)
+            total_data = merge_data_dicts(total_data, data)
+        add(total_data, server_url)
+    if edit_row_paths is not None:
+        total_data = dict()
+        for path in edit_row_paths:
+            data = read_input_file(path, False)
+            total_data = merge_data_dicts(total_data, data)
+        edit_row(total_data, server_url)
+    if edit_fields_paths is not None:
+        total_data = dict()
+        for path in edit_fields_paths:
+            data = read_input_file(path, True)
+            total_data = merge_data_dicts(total_data, data)
+        edit_fields(total_data, server_url)
+    if del_paths is not None:
+        total_data = dict()
+        for path in del_paths:
+            data = read_input_file(path, True)
+            total_data = merge_data_dicts(total_data, data)
+        delete(total_data, server_url)
+    if del_path_ms is not None:
+        total_data = dict()
+        for path in del_path_ms:
+            data = read_input_file(path, True)
+            total_data = merge_data_dicts(total_data, data)
+        delete_multiple(total_data, server_url)
     if out_path is not None:
         write_output(out_path, server_url, limit)
     if unblock:
         unblock_sync(server_url)
 
-    if [rep_path, add_path, edit_row_path, edit_fields_path, del_path, del_path_m].count(None) < 6:
+    if [rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms].count(None) < 6:
         unblock_sync(server_url)
 
     if blocked:
