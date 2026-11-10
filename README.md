@@ -3,6 +3,16 @@ Krampus is a Python [sync server](https://northpole.dev/features/sync/) for [San
 
 For more information please read through [the wiki](https://github.com/kaiobendrauf/krampus/wiki).
 
+## Updates 
+Tables for MySQL and Postgres need migrating.
+We will work on setting up migration scripts, for now the migration needs to be done manually:
+```sql
+-- Postgres
+ALTER TABLE machinestatus ALTER COLUMN primary_user DROP NOT NULL;
+-- MySQL
+ALTER TABLE machinestatus MODIFY primary_user VARCHAR(255) NULL;
+```
+
 ## Getting Started
 
 To get started with Krampus, you'll first need a database backend.
