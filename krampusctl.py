@@ -354,6 +354,9 @@ def check_valid_yaml_dict(data, allow_partial):
 def merge_data_dicts(dict1, dict2) -> dict:
     result = dict1.copy()
     for collection, value in dict2.items():
+        if collection not in result:
+            result[collection] = value
+            continue
         if isinstance(result[collection], list) and isinstance(value, list):
             result[collection] = result[collection] + value
         else:
@@ -423,62 +426,59 @@ def process_args():
 # ----------------------------------------
 #                 Main
 # ----------------------------------------
+def load_input_files(paths, allow_partial):
+    total_data = dict()
+    for path in paths:
+        data = read_input_file(path, allow_partial)
+        total_data = merge_data_dicts(total_data, data)
+    return total_data
+
 def main():
     setup_logging()
     rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms, limit, server_url, out_path, unblock, is_sync_blocked = process_args()
+    edit_args = [rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms]
 
-    if [rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms, unblock].count([]) < 5:
+    # The edit options are lists (action='append', default=[]), so "given" means
+    # non-empty, not "is not None".
+    if sum(1 for paths in edit_args if paths) > 1:
         logging.error(f'Please only use one argument that edits the krampus database.')
         sys.exit(1)
 
-    if [rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms, out_path, unblock, is_sync_blocked].count(None) > 1:
-        prep_auth(server_url)
+    # No-op unless JWT_USERNAME is set; send_authenticated_request needs jwt_token.
+    prep_auth(server_url)
 
-    if [rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms].count(None) < 6:
+    # Read and merge every input file before touching the server, so a missing or
+    # invalid file cannot leave syncs blocked.
+    rep_data = load_input_files(rep_paths, False) if rep_paths else None
+    add_data = load_input_files(add_paths, False) if add_paths else None
+    edit_row_data = load_input_files(edit_row_paths, False) if edit_row_paths else None
+    edit_fields_data = load_input_files(edit_fields_paths, True) if edit_fields_paths else None
+    del_data = load_input_files(del_paths, True) if del_paths else None
+    del_m_data = load_input_files(del_path_ms, True) if del_path_ms else None
+
+    # Only edits block syncs; reads (-o, -b) and -u must not.
+    editing = any(edit_args)
+    if editing:
         block_sync(server_url)
 
-    if len(rep_paths) > 0:
-        total_data = dict()
-        for path in rep_paths:
-            data = read_input_file(path, False)
-            total_data = merge_data_dicts(total_data, data)
-        replicate(total_data, server_url, limit)
-    if add_paths is not None:
-        total_data = dict()
-        for path in add_paths:
-            data = read_input_file(path, False)
-            total_data = merge_data_dicts(total_data, data)
-        add(total_data, server_url)
-    if edit_row_paths is not None:
-        total_data = dict()
-        for path in edit_row_paths:
-            data = read_input_file(path, False)
-            total_data = merge_data_dicts(total_data, data)
-        edit_row(total_data, server_url)
-    if edit_fields_paths is not None:
-        total_data = dict()
-        for path in edit_fields_paths:
-            data = read_input_file(path, True)
-            total_data = merge_data_dicts(total_data, data)
-        edit_fields(total_data, server_url)
-    if del_paths is not None:
-        total_data = dict()
-        for path in del_paths:
-            data = read_input_file(path, True)
-            total_data = merge_data_dicts(total_data, data)
-        delete(total_data, server_url)
-    if del_path_ms is not None:
-        total_data = dict()
-        for path in del_path_ms:
-            data = read_input_file(path, True)
-            total_data = merge_data_dicts(total_data, data)
-        delete_multiple(total_data, server_url)
+    if rep_data is not None:
+        replicate(rep_data, server_url, limit)
+    if add_data is not None:
+        add(add_data, server_url)
+    if edit_row_data is not None:
+        edit_row(edit_row_data, server_url)
+    if edit_fields_data is not None:
+        edit_fields(edit_fields_data, server_url)
+    if del_data is not None:
+        delete(del_data, server_url)
+    if del_m_data is not None:
+        delete_multiple(del_m_data, server_url)
     if out_path is not None:
         write_output(out_path, server_url, limit)
     if unblock:
         unblock_sync(server_url)
 
-    if [rep_paths, add_paths, edit_row_paths, edit_fields_paths, del_paths, del_path_ms].count(None) < 6:
+    if editing:
         unblock_sync(server_url)
 
     if blocked:
