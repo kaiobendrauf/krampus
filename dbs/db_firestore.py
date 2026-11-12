@@ -160,6 +160,11 @@ def get_last_rule_delete() -> datetime:
         return doc['last_rule_delete']
 
 
+def interpret_cursor(json_cursor: str):
+    # Checks whether cursor is valid. If valid, returns cursor cast to relevant type (database dependent), of invalid returns None
+    return json_cursor
+
+
 def is_sync_blocked() -> bool:
     '''
     Check whether the sync is blocked

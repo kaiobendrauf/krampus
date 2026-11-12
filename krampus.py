@@ -505,13 +505,12 @@ def process_ruledownload(machine_id, machine_status, data):
         batch_size = 50
     else:
         batch_size = int(batch_size)
-    # Santa's RuleDownloadRequest/Response carry the cursor as a string; the SQL
-    # backends page on the integer row_id. Convert at the protocol boundary.
     cursor = None
     if data.get('cursor') not in (None, ''):
-        try:
-            cursor = int(data['cursor'])
-        except (TypeError, ValueError):
+        # Santa's RuleDownloadRequest/Response carry the cursor as a string, must be converted if there
+        cursor = db.interpret_cursor(data['cursor'])
+        # if None after cursor has been found -> invalid cursor
+        if cursor is None:
             logging.warning(f'ruledownload from {machine_id} sent an invalid cursor: {data["cursor"]!r}')
             flask.abort(400)
     if machine_status['sync_type'].lower() == 'clean' or machine_status['sync_type'].lower() == 'clean_all' or ('last_check_in' not in machine_status):
