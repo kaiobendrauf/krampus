@@ -506,8 +506,13 @@ def process_ruledownload(machine_id, machine_status, data):
     else:
         batch_size = int(batch_size)
     cursor = None
-    if 'cursor' in data:
-        cursor = data['cursor']
+    if data.get('cursor') not in (None, ''):
+        # Santa's RuleDownloadRequest/Response carry the cursor as a string, must be converted if there
+        cursor = db.interpret_cursor(data['cursor'])
+        # if None after cursor has been found -> invalid cursor
+        if cursor is None:
+            logging.warning(f'ruledownload from {machine_id} sent an invalid cursor: {data["cursor"]!r}')
+            flask.abort(400)
     if machine_status['sync_type'].lower() == 'clean' or machine_status['sync_type'].lower() == 'clean_all' or ('last_check_in' not in machine_status):
         logging.debug(f'Performing Clean sync for {machine_id}')
         result = db.read('rules', batch_size, cursor)
@@ -523,6 +528,8 @@ def process_ruledownload(machine_id, machine_status, data):
             rules.append(rule)
     result['rules'] = rules
     result.pop('data')
+    if result.get('cursor') is not None:
+        result['cursor'] = str(result['cursor'])
 
     machine_status['n_rules_sent'] += len(result['rules'])
     db.edit_row('machinestatus', machine_status)

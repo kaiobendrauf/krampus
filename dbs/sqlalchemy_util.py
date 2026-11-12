@@ -249,6 +249,14 @@ def get_last_rule_delete() -> datetime:
         return row['last_rule_delete']
 
 
+def interpret_cursor(json_cursor: str):
+    # Checks whether cursor is valid. If valid, returns cursor cast to relevant type (database dependent), of invalid returns None
+    try:
+        return int(json_cursor)
+    except (TypeError, ValueError):
+        return None
+
+
 def is_sync_blocked() -> bool:
     '''
     Check whether sync is blocked

@@ -124,6 +124,11 @@ def get_last_rule_delete() -> datetime:
     return sqlalchemy_util.get_last_rule_delete()
 
 
+def interpret_cursor(json_cursor: str):
+    # Checks whether cursor is valid. If valid, returns cursor cast to relevant type (database dependent), of invalid returns None
+    return sqlalchemy_util.interpret_cursor(json_cursor)
+
+
 def is_sync_blocked() -> bool:
     '''
     Check whether the sync is blocked
